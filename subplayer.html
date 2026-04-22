@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #A855F7; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #A855F7; }
+      background: #F97316; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #F97316; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -205,31 +205,29 @@ function score(tw, cw) {
   return uni * 0.35 + bi * 0.65; // bigrams weighted more
 }
 
-// Rolling text buffer — keeps last ~30s of recognized speech
-let textBuffer = '';
-const MAX_BUF = 300; // chars
+function findMatch(text, currentTime) {
+  const tw = sig(text);
+  if (tw.length < 2) return null;
 
-function addToBuffer(text) {
-  textBuffer = (textBuffer + ' ' + text).slice(-MAX_BUF).trim();
-}
+  let bestNear = null, bestNearScore = 0;
+  let bestFar  = null, bestFarScore  = 0;
 
-function findNear(currentTime) {
-  const tw = sig(textBuffer);
-  if (tw.length < 3) return null;
-
-  const WIN = 120;
-  const near = S.subs.filter(s => Math.abs(s.start - currentTime) < WIN);
-  if (!near.length) return null;
-
-  let best = null, bestScore = 0;
-  for (let W = 3; W <= 6; W++) {
-    for (let i = 0; i <= near.length - W; i++) {
-      const cw = sig(near.slice(i,i+W).map(s=>s.text).join(' '));
-      const sc = score(tw, cw);
-      if (sc > bestScore) { bestScore = sc; best = { time: near[i].start, score: sc }; }
+  for (let W = 2; W <= 5; W++) {
+    for (let i = 0; i <= S.subs.length - W; i++) {
+      const cw  = sig(S.subs.slice(i, i+W).map(s=>s.text).join(' '));
+      const sc  = score(tw, cw);
+      const dt  = Math.abs(S.subs[i].start - currentTime);
+      const pos = { time: S.subs[i].start, score: sc };
+      if (dt < 90) { if (sc > bestNearScore) { bestNearScore = sc; bestNear = pos; } }
+      else         { if (sc > bestFarScore)  { bestFarScore  = sc; bestFar  = pos; } }
     }
   }
-  return bestScore >= 0.22 ? best : null;
+
+  // Nearby match is easier to trust (lower threshold)
+  if (bestNearScore >= 0.15) return bestNear;
+  // Full-file match needs more confidence to avoid wild jumps
+  if (bestFarScore  >= 0.30) return bestFar;
+  return null;
 }
 
 // ─────────────────────────────────────────
@@ -255,20 +253,20 @@ function startSync() {
   recognition.onresult = e => {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (!e.results[i].isFinal) continue;
-      addToBuffer(e.results[i][0].transcript);
-    }
-    const match = findNear(S.currentTime);
-    if (match) {
-      const diff = match.time - S.currentTime;
-      if (Math.abs(diff) > 1.2 && Math.abs(diff) < 60) {
-        S.currentTime = match.time;
-        showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+      const text = e.results[i][0].transcript;
+      const match = findMatch(text, S.currentTime);
+      if (match) {
+        const diff = match.time - S.currentTime;
+        if (Math.abs(diff) > 1.0) {
+          S.currentTime = match.time;
+          showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+        }
       }
     }
   };
 
   // Auto-restart when recognition stops (Chrome times out ~60s)
-  recognition.onend = () => { if (S.syncActive) { textBuffer = ''; setTimeout(()=>{ try { recognition.start(); } catch(e){} }, 150); } };
+  recognition.onend = () => { if (S.syncActive) { setTimeout(()=>{ try { recognition.start(); } catch(e){} }, 150); } };
   recognition.onerror = e => {
     if (e.error === 'not-allowed') { stopSync(); alert('Accès au micro refusé.'); }
     // network / aborted → onend will restart
