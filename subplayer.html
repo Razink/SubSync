@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #F97316; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #F97316; }
+      background: #6366F1; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #6366F1; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -235,21 +235,11 @@ function sig(text) {
   return norm(text).split(' ').filter(w => w.length > 2 && !STOP.has(w));
 }
 
-function bigrams(words) {
-  const out = new Set();
-  for (let i = 0; i < words.length - 1; i++) out.add(words[i]+'|'+words[i+1]);
-  return out;
-}
-
 function score(tw, cw) {
   if (!tw.length || !cw.length) return 0;
-  const tSet = new Set(tw), cSet = new Set(cw);
-  const tBi = bigrams(tw), cBi = bigrams(cw);
-  const uni = tw.filter(w => cSet.has(w)).length / Math.max(tw.length, 1);
-  let bi = 0;
-  for (const b of tBi) { if (cBi.has(b)) bi++; }
-  bi /= Math.max(tBi.size, 1);
-  return uni * 0.35 + bi * 0.65; // bigrams weighted more
+  const cSet = new Set(cw);
+  // Recall: combien de mots capturés apparaissent dans le sous-titre
+  return tw.filter(w => cSet.has(w)).length / tw.length;
 }
 
 function findMatch(text, currentTime) {
@@ -259,7 +249,7 @@ function findMatch(text, currentTime) {
   let bestNear = null, bestNearScore = 0;
   let bestFar  = null, bestFarScore  = 0;
 
-  for (let W = 2; W <= 5; W++) {
+  for (let W = 2; W <= 8; W++) {
     for (let i = 0; i <= S.subs.length - W; i++) {
       const chunk = S.subs.slice(i, i+W).map(s=>s.text).join(' ');
       const cw  = sig(chunk);
@@ -271,9 +261,8 @@ function findMatch(text, currentTime) {
     }
   }
 
-  // Seuils élevés pour éviter les faux positifs
-  if (bestNearScore >= 0.35) return bestNear;
-  if (bestFarScore  >= 0.50) return bestFar;
+  if (bestNearScore >= 0.40) return bestNear;
+  if (bestFarScore  >= 0.55) return bestFar;
 
   // Log le meilleur score même si insuffisant
   const best = bestNearScore > bestFarScore ? bestNear : bestFar;
