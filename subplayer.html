@@ -366,6 +366,12 @@ function tryMatchAndApply(text) {
       S.currentTime = match.time;
       updatePlayerUI();
       showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+      if (!S.isPlaying) {
+        S.isPlaying = true;
+        startTimer();
+        const pp = document.getElementById('pp');
+        if (pp) pp.textContent = '⏸';
+      }
     } else {
       log('l-info', '→ Déjà bon (Δ < 1s)');
     }
