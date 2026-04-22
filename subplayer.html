@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="theme-color" content="#0d0f14">
+  <title>SubPlayer</title>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --card: #161820;
+      --card2: #1e202a;
+      --gold: #c9a227;
+      --gold2: #e6b84a;
+      --text: #e8e8e8;
+      --muted: #6b7280;
+      --border: #2a2d3a;
+      --green: #22c55e;
+      --red: #ef4444;
+      --r: 16px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      height: 100%; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+    }
+    #app { height: 100%; display: flex; flex-direction: column; }
+
+    /* ── SETUP ── */
+    .setup {
+      flex: 1; overflow-y: auto;
+      padding: 28px 20px 120px;
+    }
+    .logo { margin-bottom: 36px; }
+    .logo h1 {
+      font-size: 44px; font-style: italic; font-weight: 800;
+      color: var(--gold); letter-spacing: -1px; line-height: 1;
+    }
+    .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
+
+    .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
+    .sec { margin-bottom: 28px; }
+
+    /* drop zone */
+    .drop {
+      border: 1.5px dashed var(--border); border-radius: var(--r);
+      background: var(--card); padding: 32px 20px;
+      text-align: center; cursor: pointer; position: relative;
+      transition: border-color .2s, background .2s;
+    }
+    .drop.ok { border-color: var(--gold); background: rgba(201,162,39,.08); }
+    .drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .drop .ico { font-size: 38px; margin-bottom: 8px; }
+    .drop .dtitle { font-size: 16px; font-weight: 500; }
+    .drop .dsub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+    .drop.ok .dtitle { color: var(--gold); }
+
+    /* time */
+    .time-row { display: flex; align-items: center; gap: 8px; }
+    .tinp {
+      flex: 1; background: var(--card); border: 1.5px solid var(--border);
+      border-radius: var(--r); color: var(--text); font-size: 28px;
+      font-weight: 600; text-align: center; padding: 14px 4px;
+      -webkit-appearance: none; appearance: none;
+    }
+    .tinp:focus { outline: none; border-color: var(--gold); }
+    .tsep { font-size: 22px; color: var(--muted); font-weight: 700; }
+    .tlbl { text-align: center; font-size: 12px; color: var(--muted); margin-top: 6px; letter-spacing: 1px; }
+
+    /* sync button */
+    .sbtn {
+      width: 100%; padding: 18px; border-radius: var(--r);
+      border: 1.5px solid var(--gold); background: transparent;
+      color: var(--gold); font-size: 16px; font-weight: 600;
+      letter-spacing: .5px; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; gap: 10px;
+      transition: background .15s;
+    }
+    .sbtn:active { background: rgba(201,162,39,.1); }
+    .sbtn.listening { border-color: var(--green); color: var(--green); }
+    .sbtn.synced    { border-color: var(--green); color: var(--green); background: rgba(34,197,94,.08); }
+    .sbtn.err       { border-color: var(--red); color: var(--red); }
+    .sbtn:disabled  { opacity: .6; cursor: default; }
+
+    /* waveform canvas */
+    .wave-wrap {
+      display: none; flex-direction: column; align-items: center;
+      margin: 16px 0 4px;
+    }
+    .wave-wrap.active { display: flex; }
+    #wave-canvas { border-radius: 8px; }
+    .wave-status {
+      font-size: 13px; color: var(--green); margin-top: 10px;
+      font-weight: 500; letter-spacing: .3px;
+    }
+    .wave-status.analyzing { color: var(--muted); }
+    .wave-status.done { color: var(--green); }
+    .wave-status.err  { color: var(--red); }
+
+    /* sync result */
+    .sync-res {
+      display: none; margin-top: 12px; padding: 12px 16px;
+      background: var(--card); border-radius: 10px;
+      font-size: 14px; color: var(--muted); line-height: 1.5;
+    }
+    .sync-res.show { display: block; }
+    .sync-res strong { color: var(--text); }
+
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 12px; }
+
+    /* launch */
+    .launch-wrap {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+      background: linear-gradient(to top, var(--bg) 65%, transparent);
+    }
+    .lbtn {
+      width: 100%; padding: 20px; border-radius: var(--r); border: none;
+      background: var(--card2); color: var(--muted);
+      font-size: 18px; font-style: italic; font-weight: 600;
+      letter-spacing: .5px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background .2s, color .2s;
+    }
+    .lbtn.ready { background: var(--gold); color: #000; }
+    .lbtn.ready:active { background: var(--gold2); }
+
+    /* ── PLAYER ── */
+    .player {
+      flex: 1; display: flex; flex-direction: column; background: #000;
+    }
+    .p-top {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px; padding-top: calc(16px + env(safe-area-inset-top));
+    }
+    .back {
+      width: 44px; height: 44px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,.1); color: var(--text);
+      font-size: 20px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .p-name { font-size: 13px; color: var(--muted); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .p-time { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .sub-area {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 24px 20px;
+    }
+    .sub-text {
+      font-size: 30px; font-weight: 500; color: #fff;
+      text-align: center; line-height: 1.45;
+      text-shadow: 0 2px 10px rgba(0,0,0,.9);
+      min-height: 80px; transition: opacity .15s;
+    }
+    .sub-text.blank { color: rgba(255,255,255,.12); font-size: 18px; }
+
+    /* nudge */
+    .nudge {
+      display: flex; align-items: center; justify-content: center;
+      gap: 14px; padding: 0 20px 10px;
+    }
+    .nBtn {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+      color: var(--text); border-radius: 8px; padding: 7px 16px;
+      font-size: 13px; cursor: pointer;
+    }
+    .nBtn:active { background: rgba(255,255,255,.18); }
+    .nLbl { font-size: 12px; color: var(--muted); }
+
+    /* progress */
+    .prog { padding: 0 20px; margin-bottom: 6px; }
+    .prog-bar {
+      width: 100%; height: 4px; background: rgba(255,255,255,.15);
+      border-radius: 2px; cursor: pointer; position: relative; touch-action: none;
+    }
+    .prog-fill { height: 100%; background: var(--gold); border-radius: 2px; width: 0%; }
+    .prog-times {
+      display: flex; justify-content: space-between;
+      font-size: 12px; color: var(--muted); margin-top: 6px;
+    }
+
+    /* controls */
+    .ctrls {
+      display: flex; align-items: center; justify-content: center;
+      gap: 28px; padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
+    }
+    .cw { display: flex; flex-direction: column; align-items: center; }
+    .cbtn {
+      border: none; border-radius: 50%; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .12s;
+    }
+    .cbtn.sm {
+      width: 60px; height: 60px; font-size: 22px;
+      background: rgba(255,255,255,.08); color: var(--text);
+    }
+    .cbtn.sm:active { background: rgba(255,255,255,.2); }
+    .cbtn.lg {
+      width: 76px; height: 76px; font-size: 30px;
+      background: var(--gold); color: #000;
+    }
+    .cbtn.lg:active { background: var(--gold2); }
+    .clbl { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+    /* spinner */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 20px; height: 20px; border: 2px solid var(--muted);
+      border-top-color: var(--text); border-radius: 50%;
+      animation: spin .7s linear infinite; display: inline-block;
+    }
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+const S = {
+  screen: 'setup',
+  subs: [], srtName: '',
+  startAt: 0,          // seconds
+  currentTime: 0,
+  isPlaying: false,
+  syncState: 'idle',   // idle | listening | analyzing | done | err
+  syncCountdown: 20,
+  detectedPos: null,   // seconds into video where recording started
+};
+
+let timerRaf = null;
+let lastTick = null;
+let analyserNode = null;
+let animRafId = null;
+let waveCtx = null;
+
+// ─────────────────────────────────────────
+// SRT PARSER
+// ─────────────────────────────────────────
+function parseSRT(txt) {
+  const out = [];
+  for (const block of txt.trim().split(/\n\s*\n/)) {
+    const lines = block.trim().split('\n');
+    const tl = lines.find(l => l.includes('-->'));
+    if (!tl) continue;
+    const m = tl.match(/(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{1,2}):(\d{2}):(\d{2})[,.](\d{3})/);
+    if (!m) continue;
+    const start = +m[1]*3600 + +m[2]*60 + +m[3] + +m[4]/1000;
+    const end   = +m[5]*3600 + +m[6]*60 + +m[7] + +m[8]/1000;
+    const text  = lines.slice(lines.indexOf(tl)+1).join('\n').replace(/<[^>]+>/g,'').trim();
+    if (text) out.push({ start, end, text });
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────
+// AUDIO SYNC — mic-based cross-correlation
+// ─────────────────────────────────────────
+function buildSubMask(subs, totalSec, W) {
+  const N = Math.ceil(totalSec / W);
+  const mask = new Uint8Array(N);
+  for (const s of subs) {
+    const a = Math.floor(s.start / W);
+    const b = Math.ceil(s.end / W);
+    for (let i = a; i < b && i < N; i++) mask[i] = 1;
+  }
+  return mask;
+}
+
+function computeOffset(audioBuffer) {
+  const W = 0.1; // 100 ms windows
+  const sr = audioBuffer.sampleRate;
+  const raw = audioBuffer.getChannelData(0);
+  const winLen = Math.floor(sr * W);
+  const N = Math.floor(raw.length / winLen);
+
+  // RMS energy per window
+  const energy = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    let s = 0;
+    for (let j = i*winLen; j < (i+1)*winLen; j++) s += raw[j]*raw[j];
+    energy[i] = Math.sqrt(s / winLen);
+  }
+
+  // Speech mask (above 65th percentile = speech)
+  const sorted = Float32Array.from(energy).sort();
+  const thr = sorted[Math.floor(N * 0.65)];
+  const speech = new Uint8Array(N);
+  for (let i = 0; i < N; i++) speech[i] = energy[i] > thr ? 1 : 0;
+
+  // Subtitle mask for whole video
+  const totalSec = (S.subs[S.subs.length-1]?.end || 7200) + N*W;
+  const subMask = buildSubMask(S.subs, totalSec, W);
+
+  // Cross-correlate — step every 5 windows (0.5 s)
+  let best = 0, bestScore = -Infinity;
+  const STEP = 5;
+  const maxStart = subMask.length - N;
+  for (let sf = 0; sf <= maxStart; sf += STEP) {
+    let sc = 0;
+    for (let i = 0; i < N; i++) {
+      const sp = speech[i], sb = subMask[sf+i];
+      if (sp && sb)   sc += 2;
+      else if (!sp && !sb) sc += 0.5;
+      else if (sp && !sb)  sc -= 0.5;
+      else                 sc -= 1;
+    }
+    if (sc > bestScore) { bestScore = sc; best = sf; }
+  }
+  return best * W; // seconds into video
+}
+
+async function startSync() {
+  if (!S.subs.length) { alert('Charge un fichier SRT d\'abord'); return; }
+
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch(e) { alert('Micro inaccessible : ' + e.message); return; }
+
+  const audioCtx = new AudioContext();
+  const src = audioCtx.createMediaStreamSource(stream);
+  analyserNode = audioCtx.createAnalyser();
+  analyserNode.fftSize = 512;
+  src.connect(analyserNode);
+
+  const DURATION = 20;
+  S.syncState = 'listening';
+  S.syncCountdown = DURATION;
+  render();
+  drawWave();
+
+  const chunks = [];
+  const rec = new MediaRecorder(stream);
+  rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+
+  rec.onstop = async () => {
+    cancelAnimationFrame(animRafId);
+    stream.getTracks().forEach(t => t.stop());
+
+    S.syncState = 'analyzing';
+    setWaveStatus('analyzing', 'Analyse en cours…');
+
+    try {
+      await new Promise(r => setTimeout(r, 200));
+      const blob = new Blob(chunks, { type: chunks[0]?.type || 'audio/webm' });
+      const ab = await blob.arrayBuffer();
+      const ctx2 = new AudioContext();
+      const buf = await ctx2.decodeAudioData(ab);
+      ctx2.close();
+
+      const pos = computeOffset(buf);
+      S.detectedPos = pos;
+
+      // Apply detected position
+      S.startAt = pos;
+      S.syncState = 'done';
+      render();
+    } catch(e) {
+      console.error(e);
+      S.syncState = 'err';
+      render();
+    }
+    audioCtx.close();
+  };
+
+  rec.start(100);
+
+  // Countdown
+  const cd = setInterval(() => {
+    S.syncCountdown--;
+    const el = document.getElementById('wave-status');
+    if (el && S.syncState === 'listening') {
+      el.textContent = S.syncCountdown > 0
+        ? `Écoute en cours… ${S.syncCountdown}s`
+        : 'Enregistrement terminé…';
+    }
+  }, 1000);
+
+  setTimeout(() => {
+    clearInterval(cd);
+    rec.stop();
+  }, DURATION * 1000);
+}
+
+function drawWave() {
+  const canvas = document.getElementById('wave-canvas');
+  if (!canvas || !analyserNode) return;
+  waveCtx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const buf = new Uint8Array(analyserNode.frequencyBinCount);
+
+  function frame() {
+    analyserNode.getByteFrequencyData(buf);
+    waveCtx.fillStyle = '#161820';
+    waveCtx.fillRect(0, 0, W, H);
+
+    const barW = 4, gap = 3;
+    const cols = Math.floor(W / (barW + gap));
+    const step = Math.floor(buf.length / cols);
+
+    for (let i = 0; i < cols; i++) {
+      const val = buf[i * step] / 255;
+      const h = Math.max(3, val * H);
+      const alpha = 0.5 + val * 0.5;
+      waveCtx.fillStyle = `rgba(34,197,94,${alpha})`;
+      waveCtx.beginPath();
+      waveCtx.roundRect(i*(barW+gap), (H-h)/2, barW, h, 2);
+      waveCtx.fill();
+    }
+    animRafId = requestAnimationFrame(frame);
+  }
+  animRafId = requestAnimationFrame(frame);
+}
+
+function setWaveStatus(cls, txt) {
+  const el = document.getElementById('wave-status');
+  if (el) { el.className = 'wave-status ' + cls; el.textContent = txt; }
+}
+
+// ─────────────────────────────────────────
+// PLAYER TIMER
+// ─────────────────────────────────────────
+function startTimer() {
+  lastTick = performance.now();
+  function tick(now) {
+    const dt = (now - lastTick) / 1000;
+    lastTick = now;
+    S.currentTime += dt;
+    updatePlayer();
+    timerRaf = requestAnimationFrame(tick);
+  }
+  timerRaf = requestAnimationFrame(tick);
+}
+function stopTimer() {
+  if (timerRaf) { cancelAnimationFrame(timerRaf); timerRaf = null; }
+}
+
+function updatePlayer() {
+  const t = S.currentTime;
+  const total = S.subs[S.subs.length-1]?.end || 1;
+  const sub = S.subs.find(s => t >= s.start && t <= s.end);
+
+  const el = id => document.getElementById(id);
+  if (el('p-time'))    el('p-time').textContent    = fmt(t);
+  if (el('p-elapsed')) el('p-elapsed').textContent = fmt(t);
+  if (el('p-total'))   el('p-total').textContent   = fmt(total);
+  if (el('p-fill'))    el('p-fill').style.width     = Math.min(100, t/total*100) + '%';
+
+  const st = el('sub-text');
+  if (st) {
+    if (sub) { st.textContent = sub.text; st.classList.remove('blank'); }
+    else     { st.textContent = '—';      st.classList.add('blank'); }
+  }
+}
+
+function fmt(sec) {
+  sec = Math.max(0, sec);
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = Math.floor(sec%60);
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function pad(n) { return String(n).padStart(2,'0'); }
+
+// ─────────────────────────────────────────
+// RENDER
+// ─────────────────────────────────────────
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = S.screen === 'setup' ? setupHTML() : playerHTML();
+  S.screen === 'setup' ? bindSetup() : bindPlayer();
+}
+
+function setupHTML() {
+  const ok = S.subs.length > 0;
+  const ls = S.syncState === 'listening';
+  const an = S.syncState === 'analyzing';
+  const dn = S.syncState === 'done';
+  const er = S.syncState === 'err';
+
+  const h = Math.floor(S.startAt/3600);
+  const m = Math.floor((S.startAt%3600)/60);
+  const sc = Math.floor(S.startAt%60);
+
+  let sBtnCls = 'sbtn', sBtnTxt = '⟳&nbsp;&nbsp;Synchroniser';
+  if (ls) { sBtnCls += ' listening'; sBtnTxt = '◉&nbsp;&nbsp;Écoute en cours…'; }
+  if (an) { sBtnCls += ' listening'; sBtnTxt = '<span class="spinner"></span>&nbsp;&nbsp;Analyse…'; }
+  if (dn) { sBtnCls += ' synced';    sBtnTxt = '✓&nbsp;&nbsp;Synchronisé'; }
+  if (er) { sBtnCls += ' err';       sBtnTxt = '✗&nbsp;&nbsp;Échec — réessayer'; }
+
+  const showWave = ls || an;
+  let resHTML = '';
+  if (dn && S.detectedPos !== null)
+    resHTML = `<div class="sync-res show">Position détectée : <strong>${fmt(S.detectedPos)}</strong> dans la vidéo</div>`;
+  if (er)
+    resHTML = `<div class="sync-res show" style="color:var(--red)">Synchronisation échouée. Réessaie en t'approchant du son.</div>`;
+
+  return `
+    <div class="setup">
+      <div class="logo"><h1>SubPlayer</h1><p>LECTEUR DE SOUS-TITRES</p></div>
+
+      <div class="sec">
+        <div class="lbl">FICHIER SRT</div>
+        <label class="drop ${ok?'ok':''}">
+          <input type="file" accept=".srt,.txt" id="srt-in">
+          <div class="ico">${ok?'✅':'🎬'}</div>
+          <div class="dtitle">${ok ? S.srtName : 'Charger un fichier SRT'}</div>
+          <div class="dsub">${ok ? S.subs.length+' sous-titres' : 'Appuie ici pour sélectionner'}</div>
+        </label>
+      </div>
+
+      <div class="sec">
+        <div class="lbl">DÉMARRER À</div>
+        <div class="time-row">
+          <input class="tinp" type="number" id="ih" min="0" max="23" value="${h}">
+          <span class="tsep">:</span>
+          <input class="tinp" type="number" id="im" min="0" max="59" value="${m}">
+          <span class="tsep">:</span>
+          <input class="tinp" type="number" id="is" min="0" max="59" value="${sc}">
+        </div>
+        <div class="tlbl">h &nbsp;:&nbsp; min &nbsp;:&nbsp; sec</div>
+      </div>
+
+      <div class="sec">
+        <div class="lbl">SYNCHRONISATION AUTO</div>
+        <button class="${sBtnCls}" id="sync-btn" ${ls||an?'disabled':''}>
+          ${sBtnTxt}
+        </button>
+
+        <div class="wave-wrap ${showWave?'active':''}" id="wave-wrap">
+          <canvas id="wave-canvas" width="320" height="60" style="width:100%;max-width:320px"></canvas>
+          <div class="wave-status" id="wave-status">
+            ${ls ? `Écoute en cours… ${S.syncCountdown}s` : an ? 'Analyse en cours…' : ''}
+          </div>
+        </div>
+
+        ${resHTML}
+
+        <p class="hint">
+          Lance la vidéo sur ton écran puis appuie sur <em>Synchroniser</em>.<br>
+          L'app écoute 20 s via le micro pour trouver ta position automatiquement.
+        </p>
+      </div>
+    </div>
+
+    <div class="launch-wrap">
+      <button class="lbtn ${ok?'ready':''}" id="launch-btn" ${!ok?'disabled':''}>
+        ▶&nbsp;&nbsp;Lancer
+      </button>
+    </div>`;
+}
+
+function playerHTML() {
+  const total = S.subs[S.subs.length-1]?.end || 1;
+  return `
+    <div class="player">
+      <div class="p-top">
+        <button class="back" id="back">←</button>
+        <span class="p-name">${S.srtName}</span>
+        <span class="p-time" id="p-time">${fmt(S.currentTime)}</span>
+      </div>
+
+      <div class="sub-area">
+        <div class="sub-text blank" id="sub-text">—</div>
+      </div>
+
+      <div class="nudge">
+        <button class="nBtn" id="n-minus">− 0.5 s</button>
+        <span class="nLbl">décalage fin</span>
+        <button class="nBtn" id="n-plus">+ 0.5 s</button>
+      </div>
+
+      <div class="prog">
+        <div class="prog-bar" id="prog-bar">
+          <div class="prog-fill" id="p-fill"></div>
+        </div>
+        <div class="prog-times">
+          <span id="p-elapsed">${fmt(S.currentTime)}</span>
+          <span id="p-total">${fmt(total)}</span>
+        </div>
+      </div>
+
+      <div class="ctrls">
+        <div class="cw">
+          <button class="cbtn sm" id="bk">⏪</button>
+          <div class="clbl">−10 s</div>
+        </div>
+        <div class="cw">
+          <button class="cbtn lg" id="pp">${S.isPlaying?'⏸':'▶'}</button>
+        </div>
+        <div class="cw">
+          <button class="cbtn sm" id="fw">⏩</button>
+          <div class="clbl">+10 s</div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ─────────────────────────────────────────
+// BIND EVENTS
+// ─────────────────────────────────────────
+function bindSetup() {
+  document.getElementById('srt-in').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = ev => {
+      S.subs = parseSRT(ev.target.result);
+      S.srtName = f.name.replace(/\.srt$/i,'');
+      S.syncState = 'idle';
+      render();
+    };
+    r.readAsText(f);
+  });
+
+  ['ih','im','is'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', () => {
+      S.startAt = (parseInt(document.getElementById('ih').value)||0)*3600
+                + (parseInt(document.getElementById('im').value)||0)*60
+                + (parseInt(document.getElementById('is').value)||0);
+    });
+  });
+
+  document.getElementById('sync-btn')?.addEventListener('click', startSync);
+
+  document.getElementById('launch-btn')?.addEventListener('click', () => {
+    if (!S.subs.length) return;
+    S.startAt = (parseInt(document.getElementById('ih')?.value)||0)*3600
+              + (parseInt(document.getElementById('im')?.value)||0)*60
+              + (parseInt(document.getElementById('is')?.value)||0);
+    S.currentTime = S.startAt;
+    S.isPlaying = false;
+    S.screen = 'player';
+    render();
+    updatePlayer();
+  });
+}
+
+function bindPlayer() {
+  document.getElementById('back').addEventListener('click', () => {
+    stopTimer(); S.isPlaying = false; S.screen = 'setup'; render();
+  });
+
+  document.getElementById('pp').addEventListener('click', () => {
+    S.isPlaying = !S.isPlaying;
+    document.getElementById('pp').textContent = S.isPlaying ? '⏸' : '▶';
+    S.isPlaying ? startTimer() : stopTimer();
+  });
+
+  document.getElementById('bk').addEventListener('click', () => {
+    S.currentTime = Math.max(0, S.currentTime-10); updatePlayer();
+  });
+  document.getElementById('fw').addEventListener('click', () => {
+    S.currentTime += 10; updatePlayer();
+  });
+  document.getElementById('n-minus').addEventListener('click', () => {
+    S.currentTime = Math.max(0, S.currentTime-.5); updatePlayer();
+  });
+  document.getElementById('n-plus').addEventListener('click', () => {
+    S.currentTime += .5; updatePlayer();
+  });
+
+  // Tap progress bar to seek
+  document.getElementById('prog-bar').addEventListener('click', e => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const pct = (e.clientX - r.left) / r.width;
+    S.currentTime = pct * (S.subs[S.subs.length-1]?.end || 1);
+    updatePlayer();
+  });
+}
+
+// ─────────────────────────────────────────
+// PWA — inline service worker via blob URL
+// ─────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  const sw = `
+    const C='subplayer-v1';
+    self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(['/subplayer.html']))));
+    self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
+  `;
+  const blob = new Blob([sw], { type: 'application/javascript' });
+  navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(()=>{});
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
