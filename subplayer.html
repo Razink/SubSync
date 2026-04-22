@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #F59E0B; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #F59E0B; }
+      background: #EC4899; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #EC4899; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -261,19 +261,24 @@ function findMatch(text, currentTime) {
 
   for (let W = 2; W <= 5; W++) {
     for (let i = 0; i <= S.subs.length - W; i++) {
-      const cw  = sig(S.subs.slice(i, i+W).map(s=>s.text).join(' '));
+      const chunk = S.subs.slice(i, i+W).map(s=>s.text).join(' ');
+      const cw  = sig(chunk);
       const sc  = score(tw, cw);
       const dt  = Math.abs(S.subs[i].start - currentTime);
-      const pos = { time: S.subs[i].start, score: sc };
+      const pos = { time: S.subs[i].start, score: sc, text: chunk };
       if (dt < 90) { if (sc > bestNearScore) { bestNearScore = sc; bestNear = pos; } }
       else         { if (sc > bestFarScore)  { bestFarScore  = sc; bestFar  = pos; } }
     }
   }
 
-  // Nearby match is easier to trust (lower threshold)
-  if (bestNearScore >= 0.15) return bestNear;
-  // Full-file match needs more confidence to avoid wild jumps
-  if (bestFarScore  >= 0.30) return bestFar;
+  // Seuils élevés pour éviter les faux positifs
+  if (bestNearScore >= 0.35) return bestNear;
+  if (bestFarScore  >= 0.50) return bestFar;
+
+  // Log le meilleur score même si insuffisant
+  const best = bestNearScore > bestFarScore ? bestNear : bestFar;
+  const bestScore = Math.max(bestNearScore, bestFarScore);
+  if (best) log('l-fail', `✗ Meilleur score: ${bestScore.toFixed(2)} (min 0.35) — "${best.text.slice(0,40)}..."`);
   return null;
 }
 
@@ -355,15 +360,14 @@ function tryMatchAndApply(text) {
   const match = findMatch(text, S.currentTime);
   if (match) {
     const diff = match.time - S.currentTime;
-    log('l-ok', '✓ Match: ' + fmt(match.time) + ' (score:' + match.score.toFixed(2) + ' Δ' + diff.toFixed(1) + 's)');
+    log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
+    log('l-info', `  → "${match.text.slice(0, 50)}"`);
     if (Math.abs(diff) > 1.0) {
       S.currentTime = match.time;
       showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
     } else {
-      log('l-info', '→ Déjà synchronisé (Δ < 1s)');
+      log('l-info', '→ Déjà bon (Δ < 1s)');
     }
-  } else {
-    log('l-fail', '✗ Aucun match trouvé');
   }
 }
 
