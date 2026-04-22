@@ -506,10 +506,8 @@ function playerHTML() {
       <div class="sub-area">
         <div class="sub-text blank" id="sub-text">—</div>
       </div>
-      <div class="nudge">
-        <button class="nBtn" id="n-minus">− 0.5 s</button>
-        <span class="nLbl">décalage fin</span>
-        <button class="nBtn" id="n-plus">+ 0.5 s</button>
+      <div class="sync-row">
+        <button class="sync-row-btn" id="sync-btn">🎤&nbsp;&nbsp;Synchroniser</button>
       </div>
       <div class="prog">
         <div class="prog-bar" id="prog-bar">
@@ -526,15 +524,20 @@ function playerHTML() {
           <div class="clbl">−10 s</div>
         </div>
         <div class="cw">
+          <button class="cbtn sm" id="n-minus">−0.5s</button>
+          <div class="clbl">décalage</div>
+        </div>
+        <div class="cw">
           <button class="cbtn lg" id="pp">${S.isPlaying?'⏸':'▶'}</button>
+        </div>
+        <div class="cw">
+          <button class="cbtn sm" id="n-plus">+0.5s</button>
+          <div class="clbl">décalage</div>
         </div>
         <div class="cw">
           <button class="cbtn sm" id="fw">⏩</button>
           <div class="clbl">+10 s</div>
         </div>
-      </div>
-      <div class="sync-row">
-        <button class="sync-row-btn" id="sync-btn">🎤&nbsp;&nbsp;Synchroniser</button>
       </div>
       <div class="sync-overlay hidden" id="sync-overlay"></div>
     </div>`;
