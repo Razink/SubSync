@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master
-      - claude/mobile-app-development-W3Gi9
 
 permissions:
   contents: read
