@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #22C55E; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #22C55E; }
+      background: #8B5CF6; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #8B5CF6; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -103,6 +103,38 @@
     }
     .sync-btn-el:active { opacity: .8; }
 
+    /* Debug log */
+    .sync-log {
+      margin: 0 20px 10px; background: rgba(0,0,0,.6); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; max-height: 110px; overflow-y: auto;
+      display: none; font-size: 12px; font-family: monospace; line-height: 1.7;
+    }
+    .sync-log.on { display: block; }
+    .sync-log .l-mic  { color: #60a5fa; }
+    .sync-log .l-hear { color: var(--text); }
+    .sync-log .l-key  { color: #fbbf24; }
+    .sync-log .l-ok   { color: var(--green); font-weight: 700; }
+    .sync-log .l-fail { color: #f87171; }
+    .sync-log .l-info { color: var(--muted); }
+
+    /* Manual input */
+    .manual-row {
+      display: flex; gap: 8px; padding: 0 20px 10px;
+    }
+    .manual-inp {
+      flex: 1; background: var(--card); border: 1.5px solid var(--border);
+      border-radius: 10px; color: var(--text); font-size: 14px; padding: 10px 14px;
+      outline: none;
+    }
+    .manual-inp:focus { border-color: var(--gold); }
+    .manual-inp::placeholder { color: var(--muted); }
+    .manual-go {
+      background: var(--gold); color: #000; border: none; border-radius: 10px;
+      padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+      white-space: nowrap;
+    }
+    .manual-go:active { background: var(--gold2); }
+
     .prog { padding: 0 20px; margin-bottom: 6px; }
     .prog-bar { width: 100%; height: 4px; background: rgba(255,255,255,.15);
       border-radius: 2px; cursor: pointer; }
@@ -141,6 +173,21 @@ const S = {
 
 let timerRaf = null, lastTick = null;
 let recognition = null;
+
+// ─────────────────────────────────────────
+// DEBUG LOG
+// ─────────────────────────────────────────
+function log(cls, msg) {
+  const el = document.getElementById('sync-log');
+  if (!el) return;
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  // Keep last 20 lines
+  while (el.children.length > 20) el.removeChild(el.firstChild);
+  el.scrollTop = el.scrollHeight;
+}
 
 // ─────────────────────────────────────────
 // SRT PARSER
@@ -250,26 +297,24 @@ function startSync() {
   recognition.continuous = true;
   recognition.interimResults = false;
 
+  recognition.onstart = () => log('l-mic', '🎤 Micro actif — écoute...');
+
   recognition.onresult = e => {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       if (!e.results[i].isFinal) continue;
       const text = e.results[i][0].transcript;
-      const match = findMatch(text, S.currentTime);
-      if (match) {
-        const diff = match.time - S.currentTime;
-        if (Math.abs(diff) > 1.0) {
-          S.currentTime = match.time;
-          showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
-        }
-      }
+      log('l-hear', '💬 "' + text + '"');
+      tryMatchAndApply(text);
     }
   };
 
-  // Auto-restart when recognition stops (Chrome times out ~60s)
-  recognition.onend = () => { if (S.syncActive) { setTimeout(()=>{ try { recognition.start(); } catch(e){} }, 150); } };
+  recognition.onend = () => {
+    log('l-info', '↺ Redémarrage micro...');
+    if (S.syncActive) { setTimeout(()=>{ try { recognition.start(); } catch(e){} }, 150); }
+  };
   recognition.onerror = e => {
+    log('l-fail', '✗ Erreur micro: ' + e.error);
     if (e.error === 'not-allowed') { stopSync(); alert('Accès au micro refusé.'); }
-    // network / aborted → onend will restart
   };
 
   try { recognition.start(); } catch(e) {}
@@ -279,19 +324,49 @@ function stopSync() {
   S.syncActive = false;
   try { recognition?.stop(); } catch(e) {}
   recognition = null;
+  log('l-info', '⏹ Sync arrêtée');
   updateSyncBtn();
 }
 
+function tryMatchAndApply(text) {
+  const tw = sig(text);
+  log('l-key', '🔑 Mots clés: [' + tw.join(', ') + ']');
+  if (tw.length < 2) { log('l-fail', '✗ Pas assez de mots clés (<2)'); return; }
+  const match = findMatch(text, S.currentTime);
+  if (match) {
+    const diff = match.time - S.currentTime;
+    log('l-ok', '✓ Match: ' + fmt(match.time) + ' (score:' + match.score.toFixed(2) + ' Δ' + diff.toFixed(1) + 's)');
+    if (Math.abs(diff) > 1.0) {
+      S.currentTime = match.time;
+      showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+    } else {
+      log('l-info', '→ Déjà synchronisé (Δ < 1s)');
+    }
+  } else {
+    log('l-fail', '✗ Aucun match trouvé');
+  }
+}
+
+function manualSync() {
+  const inp = document.getElementById('manual-inp');
+  if (!inp || !inp.value.trim()) return;
+  const text = inp.value.trim();
+  log('l-mic', '✍️ Manuel: "' + text + '"');
+  tryMatchAndApply(text);
+}
+
 function updateSyncBtn() {
-  const btn = document.getElementById('sync-btn-el');
+  const btn  = document.getElementById('sync-btn-el');
   const pill = document.getElementById('sync-pill');
+  const logEl = document.getElementById('sync-log');
   if (btn) {
     btn.className = 'sync-btn-el' + (S.syncActive ? ' active' : '');
     btn.innerHTML = S.syncActive
       ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1s infinite;display:inline-block"></span>&nbsp;&nbsp;Sync actif — appuie pour arrêter'
       : '🎤&nbsp;&nbsp;Synchroniser';
   }
-  if (pill) pill.className = 'sync-pill' + (S.syncActive ? ' on' : '');
+  if (pill)  pill.className  = 'sync-pill'  + (S.syncActive ? ' on' : '');
+  if (logEl) logEl.className = 'sync-log' + (S.syncActive ? ' on' : '');
 }
 
 function showPing(label) {
@@ -400,6 +475,14 @@ function playerHTML() {
         <button class="sync-btn-el" id="sync-btn-el">🎤&nbsp;&nbsp;Synchroniser</button>
       </div>
 
+      <div class="sync-log ${S.syncActive ? 'on' : ''}" id="sync-log"></div>
+
+      <div class="manual-row">
+        <input class="manual-inp" id="manual-inp" type="text"
+          placeholder="Tape quelques mots pour synchro...">
+        <button class="manual-go" id="manual-go">OK</button>
+      </div>
+
       <div class="prog">
         <div class="prog-bar" id="prog-bar">
           <div class="prog-fill" id="p-fill"></div>
@@ -482,6 +565,10 @@ function bindPlayer() {
     updatePlayerUI();
   });
   document.getElementById('sync-btn-el').addEventListener('click', toggleSync);
+  document.getElementById('manual-go').addEventListener('click', manualSync);
+  document.getElementById('manual-inp').addEventListener('keydown', e => {
+    if (e.key === 'Enter') manualSync();
+  });
 }
 
 // ─────────────────────────────────────────
