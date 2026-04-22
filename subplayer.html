@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #F59E0B; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #F59E0B; }
+      background: #EF4444; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #EF4444; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -352,7 +352,7 @@ function tryMatchAndApply(text) {
     log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
     log('l-info', `  → "${match.text.slice(0, 50)}"`);
     if (Math.abs(diff) > 1.0) {
-      S.currentTime = match.time + 2.5; // compense le délai de reconnaissance (~2-3s)
+      S.currentTime = match.time + 4.5; // compense le délai de reconnaissance
       updatePlayerUI();
       showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
       if (!S.isPlaying) {
