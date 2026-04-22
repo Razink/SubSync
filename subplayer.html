@@ -27,7 +27,6 @@
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
-
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
       background: var(--card); padding: 32px 20px; text-align: center;
       cursor: pointer; position: relative; transition: border-color .2s, background .2s; }
@@ -37,45 +36,69 @@
     .drop .dtitle { font-size: 16px; font-weight: 500; }
     .drop .dsub { font-size: 13px; color: var(--muted); margin-top: 4px; }
     .drop.ok .dtitle { color: var(--gold); }
-
     .hint-box { background: var(--card); border-radius: var(--r); padding: 16px;
       font-size: 13px; color: var(--muted); line-height: 1.7; }
     .hint-box strong { color: var(--text); }
-
     .launch-wrap { position: fixed; bottom: 0; left: 0; right: 0;
       padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
       background: linear-gradient(to top, var(--bg) 65%, transparent); }
     .lbtn { width: 100%; padding: 20px; border-radius: var(--r); border: none;
       background: var(--card2); color: var(--muted); font-size: 18px;
-      font-style: italic; font-weight: 600; letter-spacing: .5px; cursor: pointer;
+      font-style: italic; font-weight: 600; cursor: pointer;
       display: flex; align-items: center; justify-content: center; gap: 10px;
       transition: background .2s, color .2s; }
     .lbtn.ready { background: var(--gold); color: #000; }
     .lbtn.ready:active { background: var(--gold2); }
 
     /* ── PLAYER ── */
-    .player { flex: 1; display: flex; flex-direction: column; background: #000; position: relative; }
+    .player { flex: 1; display: flex; flex-direction: column; background: #000; }
     .p-top { display: flex; align-items: center; justify-content: space-between;
       padding: 16px 20px; padding-top: calc(16px + env(safe-area-inset-top)); }
     .back { width: 44px; height: 44px; border-radius: 50%; border: none;
       background: rgba(255,255,255,.1); color: var(--text); font-size: 20px;
       cursor: pointer; display: flex; align-items: center; justify-content: center; }
-    .p-name { font-size: 13px; color: var(--muted); max-width: 160px;
+    .p-name { font-size: 13px; color: var(--muted); max-width: 140px;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .p-time { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
+    /* Sync status pill — top right */
+    .sync-pill {
+      display: none; align-items: center; gap: 6px;
+      background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3);
+      border-radius: 20px; padding: 4px 10px; font-size: 12px; color: var(--green);
+      font-weight: 600;
+    }
+    .sync-pill.on { display: flex; }
+    .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+      animation: blink 1.2s ease-in-out infinite; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+    /* Adjusted ping */
+    .adj-ping { position: absolute; top: 80px; right: 20px;
+      background: rgba(34,197,94,.9); color: #000; font-size: 12px; font-weight: 700;
+      padding: 4px 10px; border-radius: 20px; opacity: 0;
+      transition: opacity .3s; pointer-events: none; }
+
     .sub-area { flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; padding: 24px 20px; }
+      align-items: center; justify-content: center; padding: 24px 20px; position: relative; }
     .sub-text { font-size: 30px; font-weight: 500; color: #fff; text-align: center;
       line-height: 1.45; text-shadow: 0 2px 10px rgba(0,0,0,.9); min-height: 80px; }
     .sub-text.blank { color: rgba(255,255,255,.12); font-size: 18px; }
 
-    .nudge { display: flex; align-items: center; justify-content: center;
-      gap: 14px; padding: 0 20px 10px; }
-    .nBtn { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-      color: var(--text); border-radius: 8px; padding: 7px 16px; font-size: 13px; cursor: pointer; }
-    .nBtn:active { background: rgba(255,255,255,.18); }
-    .nLbl { font-size: 12px; color: var(--muted); }
+    /* Sync button — full width, prominent */
+    .sync-row { padding: 0 20px 10px; }
+    .sync-btn-el {
+      width: 100%; padding: 15px; border-radius: var(--r);
+      font-size: 16px; font-weight: 600; letter-spacing: .3px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background .15s, border-color .15s;
+      border: 1.5px solid rgba(34,197,94,.4);
+      background: rgba(34,197,94,.1); color: var(--green);
+    }
+    .sync-btn-el.active {
+      background: rgba(34,197,94,.2); border-color: var(--green); color: var(--green);
+    }
+    .sync-btn-el:active { opacity: .8; }
 
     .prog { padding: 0 20px; margin-bottom: 6px; }
     .prog-bar { width: 100%; height: 4px; background: rgba(255,255,255,.15);
@@ -85,80 +108,19 @@
       font-size: 12px; color: var(--muted); margin-top: 6px; }
 
     .ctrls { display: flex; align-items: center; justify-content: center;
-      gap: 20px; padding: 12px 20px 8px; }
+      gap: 14px; padding: 12px 20px calc(16px + env(safe-area-inset-bottom)); }
     .cw { display: flex; flex-direction: column; align-items: center; }
     .cbtn { border: none; border-radius: 50%; cursor: pointer;
       display: flex; align-items: center; justify-content: center; transition: background .12s; }
-    .cbtn.sm { width: 56px; height: 56px; font-size: 20px;
+    .cbtn.sm { width: 52px; height: 52px; font-size: 18px;
       background: rgba(255,255,255,.08); color: var(--text); }
     .cbtn.sm:active { background: rgba(255,255,255,.2); }
-    .cbtn.lg { width: 72px; height: 72px; font-size: 28px; background: var(--gold); color: #000; }
+    .cbtn.xs { width: 44px; height: 44px; font-size: 14px; font-weight: 600;
+      background: rgba(255,255,255,.06); color: var(--muted); border: 1px solid var(--border); }
+    .cbtn.xs:active { background: rgba(255,255,255,.15); }
+    .cbtn.lg { width: 68px; height: 68px; font-size: 26px; background: var(--gold); color: #000; }
     .cbtn.lg:active { background: var(--gold2); }
-    .clbl { font-size: 10px; color: var(--muted); margin-top: 5px; }
-
-    /* Sync row — full width, well visible */
-    .sync-row {
-      padding: 0 20px calc(16px + env(safe-area-inset-bottom));
-    }
-    .sync-row-btn {
-      width: 100%; padding: 15px; border-radius: var(--r); border: none;
-      background: rgba(34,197,94,.12); color: var(--green);
-      border: 1.5px solid rgba(34,197,94,.3);
-      font-size: 16px; font-weight: 600; letter-spacing: .5px;
-      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
-      transition: background .15s;
-    }
-    .sync-row-btn:active { background: rgba(34,197,94,.25); }
-
-    /* ── SYNC OVERLAY ── */
-    .sync-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.92);
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: 32px 24px; z-index: 10; }
-    .sync-overlay.hidden { display: none; }
-
-    .mic-ring { width: 88px; height: 88px; border-radius: 50%;
-      background: rgba(34,197,94,.1); border: 2px solid var(--green);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 36px; margin-bottom: 24px; position: relative; }
-    .mic-ring.pulse::before { content: ''; position: absolute; inset: -8px;
-      border-radius: 50%; border: 2px solid rgba(34,197,94,.4);
-      animation: ripple 1.2s ease-out infinite; }
-    .mic-ring.pulse::after { content: ''; position: absolute; inset: -16px;
-      border-radius: 50%; border: 2px solid rgba(34,197,94,.2);
-      animation: ripple 1.2s ease-out .4s infinite; }
-    @keyframes ripple { 0% { transform: scale(.9); opacity: 1; }
-      100% { transform: scale(1.3); opacity: 0; } }
-
-    .sync-title { font-size: 13px; letter-spacing: 2px; color: var(--muted); margin-bottom: 8px; }
-    .sync-status { font-size: 18px; font-weight: 600; color: var(--text);
-      margin-bottom: 20px; text-align: center; min-height: 28px; }
-    .sync-status.ok  { color: var(--green); }
-    .sync-status.err { color: var(--red); }
-
-    .transcript-box { width: 100%; background: var(--card); border-radius: 12px;
-      padding: 14px 16px; min-height: 80px; font-size: 14px; color: var(--muted);
-      line-height: 1.6; margin-bottom: 24px; font-style: italic; }
-    .transcript-box span { color: var(--text); }
-
-    .sync-progress { width: 100%; height: 3px; background: rgba(255,255,255,.1);
-      border-radius: 2px; overflow: hidden; margin-bottom: 24px; }
-    .sync-progress-fill { height: 100%; background: var(--green);
-      border-radius: 2px; transition: width .5s linear; width: 0%; }
-
-    .sync-actions { display: flex; gap: 12px; width: 100%; }
-    .sync-cancel { flex: 1; padding: 14px; border-radius: 12px; border: 1px solid var(--border);
-      background: transparent; color: var(--muted); font-size: 15px; cursor: pointer; }
-    .sync-cancel:active { background: var(--card); }
-    .sync-retry { flex: 1; padding: 14px; border-radius: 12px; border: none;
-      background: var(--gold); color: #000; font-size: 15px; font-weight: 600;
-      cursor: pointer; display: none; }
-    .sync-retry:active { background: var(--gold2); }
-    .sync-retry.show { display: block; }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner { width: 18px; height: 18px; border: 2px solid var(--muted);
-      border-top-color: var(--text); border-radius: 50%;
-      animation: spin .7s linear infinite; display: inline-block; vertical-align: middle; }
+    .clbl { font-size: 10px; color: var(--muted); margin-top: 4px; }
   </style>
 </head>
 <body>
@@ -171,14 +133,11 @@ const S = {
   screen: 'setup',
   subs: [], srtName: '', lang: 'fr-FR',
   currentTime: 0, isPlaying: false,
-  syncOpen: false,
-  syncPhase: 'idle', // idle | listening | searching | done | err | nospeech
-  syncCountdown: 15,
-  transcript: '',
+  syncActive: false,
 };
 
 let timerRaf = null, lastTick = null;
-let recognition = null, cdInterval = null;
+let recognition = null;
 
 // ─────────────────────────────────────────
 // SRT PARSER
@@ -200,211 +159,146 @@ function parseSRT(txt) {
 }
 
 function detectLang(subs) {
-  const sample = subs.slice(0, 30).map(s => s.text).join(' ').toLowerCase();
-  const fr = ['je','tu','il','elle','nous','vous','les','des','que','pas','une','est'].filter(w => sample.includes(' '+w+' ')).length;
-  const en = ['the','and','you','that','this','with','have','they','from','were'].filter(w => sample.includes(' '+w+' ')).length;
-  const ar = ['في','من','على','هذا','أن','كان'].filter(w => sample.includes(w)).length;
-  if (ar > 1) return 'ar-SA';
-  return fr >= en ? 'fr-FR' : 'en-US';
+  const s = subs.slice(0,30).map(x=>x.text).join(' ').toLowerCase();
+  const fr = ['je','tu','il','elle','les','des','que','pas','une','est'].filter(w=>s.includes(' '+w+' ')).length;
+  const en = ['the','and','you','that','this','with','have','from','were'].filter(w=>s.includes(' '+w+' ')).length;
+  const ar = ['في','من','على','هذا','أن'].filter(w=>s.includes(w)).length;
+  if (ar>1) return 'ar-SA';
+  return fr>=en ? 'fr-FR' : 'en-US';
 }
 
 // ─────────────────────────────────────────
-// TEXT MATCHING
+// TEXT MATCHING — bigrams + accent-insensitive
 // ─────────────────────────────────────────
 const STOP = new Set(['le','la','les','de','du','un','une','et','est','je','tu','il','elle',
-  'nous','vous','ils','elles','en','au','aux','se','sa','son','ce','si','ne','pas','plus','que',
-  'qui','à','the','a','an','and','is','are','i','you','he','she','we','they','it','to','of',
-  'in','that','was','for','on','with','as','his','her','but','be','not','no','so','do','did']);
+  'nous','vous','ils','elles','en','au','se','sa','son','ce','si','ne','pas','que','qui','ca',
+  'the','a','an','and','is','are','i','you','he','she','we','they','it','to','of','in',
+  'that','was','for','on','with','as','but','not','be','so','do','no','my','me','him','her']);
 
-function clean(text) {
+function norm(text) {
   return text.toLowerCase()
-    .replace(/['']/g,"'")
-    .replace(/[^a-záàâäéèêëîïôùûüç'\s]/gi,' ')
-    .replace(/\s+/g,' ').trim();
-}
-function sig(text) {
-  return clean(text).split(' ').filter(w => w.length > 2 && !STOP.has(w));
+    .normalize('NFD').replace(/[̀-ͯ]/g,'') // strip accents
+    .replace(/['']/g,' ').replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim();
 }
 
-function findPosition(transcript, subs) {
-  const tw = sig(transcript);
-  if (tw.length < 2) return null;
+function sig(text) {
+  return norm(text).split(' ').filter(w => w.length > 2 && !STOP.has(w));
+}
+
+function bigrams(words) {
+  const out = new Set();
+  for (let i = 0; i < words.length - 1; i++) out.add(words[i]+'|'+words[i+1]);
+  return out;
+}
+
+function score(tw, cw) {
+  if (!tw.length || !cw.length) return 0;
+  const tSet = new Set(tw), cSet = new Set(cw);
+  const tBi = bigrams(tw), cBi = bigrams(cw);
+  const uni = tw.filter(w => cSet.has(w)).length / Math.max(tw.length, 1);
+  let bi = 0;
+  for (const b of tBi) { if (cBi.has(b)) bi++; }
+  bi /= Math.max(tBi.size, 1);
+  return uni * 0.35 + bi * 0.65; // bigrams weighted more
+}
+
+// Rolling text buffer — keeps last ~30s of recognized speech
+let textBuffer = '';
+const MAX_BUF = 300; // chars
+
+function addToBuffer(text) {
+  textBuffer = (textBuffer + ' ' + text).slice(-MAX_BUF).trim();
+}
+
+function findNear(currentTime) {
+  const tw = sig(textBuffer);
+  if (tw.length < 3) return null;
+
+  const WIN = 120;
+  const near = S.subs.filter(s => Math.abs(s.start - currentTime) < WIN);
+  if (!near.length) return null;
 
   let best = null, bestScore = 0;
-
-  // Try windows of 4 to 8 subtitles
-  for (let W = 4; W <= 8; W++) {
-    for (let i = 0; i <= subs.length - W; i++) {
-      const chunk = subs.slice(i, i+W).map(s => s.text).join(' ');
-      const cw = sig(chunk);
-      const cSet = new Set(cw);
-      const matches = tw.filter(w => cSet.has(w)).length;
-      const score = matches / Math.max(tw.length, 1);
-      if (score > bestScore) {
-        bestScore = score;
-        best = { time: subs[i].start, score, subIdx: i };
-      }
+  for (let W = 3; W <= 6; W++) {
+    for (let i = 0; i <= near.length - W; i++) {
+      const cw = sig(near.slice(i,i+W).map(s=>s.text).join(' '));
+      const sc = score(tw, cw);
+      if (sc > bestScore) { bestScore = sc; best = { time: near[i].start, score: sc }; }
     }
   }
-  return bestScore >= 0.18 ? best : null;
+  return bestScore >= 0.22 ? best : null;
 }
 
 // ─────────────────────────────────────────
-// SPEECH RECOGNITION SYNC
+// CONTINUOUS SYNC
 // ─────────────────────────────────────────
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-function startSync() {
-  if (!SR) {
-    S.syncPhase = 'err';
-    S.syncOpen = true;
-    renderSyncOverlay('La reconnaissance vocale n\'est pas disponible sur ce navigateur.');
-    return;
-  }
+function toggleSync() {
+  S.syncActive ? stopSync() : startSync();
+}
 
-  S.transcript = '';
-  S.syncPhase = 'listening';
-  S.syncCountdown = 15;
-  S.syncOpen = true;
-  renderSyncOverlay();
+function startSync() {
+  if (!SR) { alert('Reconnaissance vocale non disponible sur ce navigateur.'); return; }
+
+  S.syncActive = true;
+  updateSyncBtn();
 
   recognition = new SR();
   recognition.lang = S.lang;
   recognition.continuous = true;
-  recognition.interimResults = true;
-
-  let finalTranscript = '';
+  recognition.interimResults = false;
 
   recognition.onresult = e => {
-    let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      const t = e.results[i][0].transcript;
-      e.results[i].isFinal ? (finalTranscript += ' ' + t) : (interim += t);
+      if (!e.results[i].isFinal) continue;
+      addToBuffer(e.results[i][0].transcript);
     }
-    S.transcript = (finalTranscript + ' ' + interim).trim();
-    const el = document.getElementById('live-transcript');
-    if (el) el.innerHTML = S.transcript
-      ? `<span>${S.transcript}</span>`
-      : '<em>En attente de la voix…</em>';
+    const match = findNear(S.currentTime);
+    if (match) {
+      const diff = match.time - S.currentTime;
+      if (Math.abs(diff) > 1.2 && Math.abs(diff) < 60) {
+        S.currentTime = match.time;
+        showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+      }
+    }
   };
 
+  // Auto-restart when recognition stops (Chrome times out ~60s)
+  recognition.onend = () => { if (S.syncActive) { textBuffer = ''; setTimeout(()=>{ try { recognition.start(); } catch(e){} }, 150); } };
   recognition.onerror = e => {
-    if (e.error === 'not-allowed') {
-      stopSync();
-      S.syncPhase = 'err';
-      renderSyncOverlay('Accès au micro refusé. Autorise le micro dans les paramètres Chrome.');
-    }
+    if (e.error === 'not-allowed') { stopSync(); alert('Accès au micro refusé.'); }
+    // network / aborted → onend will restart
   };
 
-  recognition.start();
-
-  // Countdown
-  cdInterval = setInterval(() => {
-    S.syncCountdown--;
-    const el = document.getElementById('sync-cd');
-    const pf = document.getElementById('sync-pf');
-    if (el) el.textContent = S.syncCountdown > 0 ? `Écoute… ${S.syncCountdown}s` : 'Traitement…';
-    if (pf) pf.style.width = ((15 - S.syncCountdown) / 15 * 100) + '%';
-    if (S.syncCountdown <= 0) finishSync();
-  }, 1000);
-}
-
-function finishSync() {
-  clearInterval(cdInterval);
-  recognition?.stop();
-  recognition = null;
-
-  S.syncPhase = 'searching';
-  const statusEl = document.getElementById('sync-cd');
-  if (statusEl) statusEl.textContent = 'Recherche dans les sous-titres…';
-
-  setTimeout(() => {
-    const result = findPosition(S.transcript, S.subs);
-    if (result) {
-      S.currentTime = result.time;
-      S.syncPhase = 'done';
-      const conf = Math.round(result.score * 100);
-      renderSyncOverlay(`✓ Position trouvée : ${fmt(result.time)} (${conf}% de correspondance)`);
-      // Auto-close after 2s and resume playback
-      setTimeout(() => {
-        S.syncOpen = false;
-        S.syncPhase = 'idle';
-        renderPlayerScreen();
-        if (!S.isPlaying) {
-          S.isPlaying = true;
-          startTimer();
-          const pp = document.getElementById('pp');
-          if (pp) pp.textContent = '⏸';
-        }
-      }, 2000);
-    } else {
-      S.syncPhase = 'nospeech';
-      renderSyncOverlay(S.transcript.length < 10
-        ? 'Pas de voix détectée. Approche-toi du son et réessaie.'
-        : 'Aucune correspondance trouvée. Réessaie sur un passage avec des dialogues.');
-    }
-  }, 300);
+  try { recognition.start(); } catch(e) {}
 }
 
 function stopSync() {
-  clearInterval(cdInterval);
-  recognition?.stop();
+  S.syncActive = false;
+  try { recognition?.stop(); } catch(e) {}
   recognition = null;
-  S.syncOpen = false;
-  S.syncPhase = 'idle';
-  renderPlayerScreen();
+  updateSyncBtn();
 }
 
-function renderSyncOverlay(statusMsg) {
-  const overlay = document.getElementById('sync-overlay');
-  if (!overlay) return;
-  overlay.classList.remove('hidden');
+function updateSyncBtn() {
+  const btn = document.getElementById('sync-btn-el');
+  const pill = document.getElementById('sync-pill');
+  if (btn) {
+    btn.className = 'sync-btn-el' + (S.syncActive ? ' active' : '');
+    btn.innerHTML = S.syncActive
+      ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1s infinite;display:inline-block"></span>&nbsp;&nbsp;Sync actif — appuie pour arrêter'
+      : '🎤&nbsp;&nbsp;Synchroniser';
+  }
+  if (pill) pill.className = 'sync-pill' + (S.syncActive ? ' on' : '');
+}
 
-  const isListening = S.syncPhase === 'listening';
-  const isDone = S.syncPhase === 'done';
-  const isErr = S.syncPhase === 'err' || S.syncPhase === 'nospeech';
-  const isSearching = S.syncPhase === 'searching';
-
-  let statusCls = '';
-  if (isDone) statusCls = 'ok';
-  if (isErr) statusCls = 'err';
-
-  let statusText = statusMsg || (isListening ? `Écoute… ${S.syncCountdown}s` : '');
-  if (isSearching) statusText = '<span class="spinner"></span> Recherche…';
-
-  overlay.innerHTML = `
-    <div class="sync-title">SYNCHRONISATION</div>
-    <div class="mic-ring ${isListening ? 'pulse' : ''}">🎤</div>
-    <div class="sync-status ${statusCls}" id="sync-cd">${statusText}</div>
-
-    <div class="transcript-box">
-      <div id="live-transcript">${
-        S.transcript
-          ? `<span>${S.transcript}</span>`
-          : isDone || isErr ? '' : '<em>En attente de la voix…</em>'
-      }</div>
-    </div>
-
-    <div class="sync-progress">
-      <div class="sync-progress-fill" id="sync-pf"
-        style="width:${isListening ? ((15 - S.syncCountdown)/15*100) : isDone ? 100 : 0}%">
-      </div>
-    </div>
-
-    <div class="sync-actions">
-      <button class="sync-cancel" id="sync-cancel">
-        ${isDone ? 'Fermer' : 'Annuler'}
-      </button>
-      <button class="sync-retry ${isErr || S.syncPhase==='nospeech' ? 'show' : ''}" id="sync-retry">
-        Réessayer
-      </button>
-    </div>`;
-
-  document.getElementById('sync-cancel')?.addEventListener('click', stopSync);
-  document.getElementById('sync-retry')?.addEventListener('click', () => {
-    S.syncPhase = 'idle';
-    startSync();
-  });
+function showPing(label) {
+  const el = document.getElementById('adj-ping');
+  if (!el) return;
+  el.textContent = '✓ ' + label;
+  el.style.opacity = '1';
+  setTimeout(() => { if(el) el.style.opacity = '0'; }, 1800);
 }
 
 // ─────────────────────────────────────────
@@ -441,7 +335,7 @@ function updatePlayerUI() {
 }
 
 function fmt(s) {
-  s = Math.max(0, s);
+  s = Math.max(0,s);
   const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), ss=Math.floor(s%60);
   return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
 }
@@ -453,14 +347,7 @@ function p(n) { return String(n).padStart(2,'0'); }
 function render() {
   const app = document.getElementById('app');
   if (S.screen === 'setup') { app.innerHTML = setupHTML(); bindSetup(); }
-  else { app.innerHTML = playerHTML(); bindPlayer(); if (S.syncOpen) renderSyncOverlay(); }
-}
-
-function renderPlayerScreen() {
-  const app = document.getElementById('app');
-  app.innerHTML = playerHTML();
-  bindPlayer();
-  updatePlayerUI();
+  else { app.innerHTML = playerHTML(); bindPlayer(); updatePlayerUI(); updateSyncBtn(); }
 }
 
 function setupHTML() {
@@ -477,20 +364,16 @@ function setupHTML() {
           <div class="dsub">${ok ? S.subs.length+' sous-titres · '+S.lang : 'Appuie ici pour sélectionner'}</div>
         </label>
       </div>
-      ${ok ? '' : `
-      <div class="sec">
-        <div class="hint-box">
-          <strong>Comment ça marche ?</strong><br>
-          1. Charge un fichier .srt<br>
-          2. Lance la vidéo sur ton écran<br>
-          3. Dans le player, appuie sur 🎤 pour synchroniser automatiquement
-        </div>
-      </div>`}
+      ${ok ? '' : `<div class="sec"><div class="hint-box">
+        <strong>Comment utiliser</strong><br>
+        1. Charge un fichier .srt<br>
+        2. Lance la vidéo sur ton écran<br>
+        3. Appuie sur <strong>Lancer</strong> puis <strong>🎤 Synchroniser</strong><br>
+        La sync tourne en continu et se corrige toute seule
+      </div></div>`}
     </div>
     <div class="launch-wrap">
-      <button class="lbtn ${ok?'ready':''}" id="launch-btn" ${!ok?'disabled':''}>
-        ▶&nbsp;&nbsp;Lancer
-      </button>
+      <button class="lbtn ${ok?'ready':''}" id="launch-btn" ${!ok?'disabled':''}>▶&nbsp;&nbsp;Lancer</button>
     </div>`;
 }
 
@@ -501,14 +384,21 @@ function playerHTML() {
       <div class="p-top">
         <button class="back" id="back">←</button>
         <span class="p-name">${S.srtName}</span>
+        <div class="sync-pill" id="sync-pill">
+          <div class="sync-dot"></div>SYNC
+        </div>
         <span class="p-time" id="p-time">${fmt(S.currentTime)}</span>
       </div>
+
       <div class="sub-area">
         <div class="sub-text blank" id="sub-text">—</div>
+        <div class="adj-ping" id="adj-ping"></div>
       </div>
+
       <div class="sync-row">
-        <button class="sync-row-btn" id="sync-btn">🎤&nbsp;&nbsp;Synchroniser</button>
+        <button class="sync-btn-el" id="sync-btn-el">🎤&nbsp;&nbsp;Synchroniser</button>
       </div>
+
       <div class="prog">
         <div class="prog-bar" id="prog-bar">
           <div class="prog-fill" id="p-fill"></div>
@@ -518,20 +408,21 @@ function playerHTML() {
           <span id="p-total">${fmt(total)}</span>
         </div>
       </div>
+
       <div class="ctrls">
         <div class="cw">
           <button class="cbtn sm" id="bk">⏪</button>
           <div class="clbl">−10 s</div>
         </div>
         <div class="cw">
-          <button class="cbtn sm" id="n-minus">−0.5s</button>
+          <button class="cbtn xs" id="n-minus">−0.5s</button>
           <div class="clbl">décalage</div>
         </div>
         <div class="cw">
           <button class="cbtn lg" id="pp">${S.isPlaying?'⏸':'▶'}</button>
         </div>
         <div class="cw">
-          <button class="cbtn sm" id="n-plus">+0.5s</button>
+          <button class="cbtn xs" id="n-plus">+0.5s</button>
           <div class="clbl">décalage</div>
         </div>
         <div class="cw">
@@ -539,7 +430,6 @@ function playerHTML() {
           <div class="clbl">+10 s</div>
         </div>
       </div>
-      <div class="sync-overlay hidden" id="sync-overlay"></div>
     </div>`;
 }
 
@@ -560,8 +450,7 @@ function bindSetup() {
   });
   document.getElementById('launch-btn')?.addEventListener('click', () => {
     if (!S.subs.length) return;
-    S.currentTime = 0; S.isPlaying = false; S.screen = 'player';
-    render(); updatePlayerUI();
+    S.currentTime = 0; S.isPlaying = false; S.screen = 'player'; render();
   });
 }
 
@@ -587,22 +476,18 @@ function bindPlayer() {
     S.currentTime += .5; updatePlayerUI();
   });
   document.getElementById('prog-bar').addEventListener('click', e => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    S.currentTime = (e.clientX - rect.left) / rect.width * (S.subs[S.subs.length-1]?.end || 1);
+    const r = e.currentTarget.getBoundingClientRect();
+    S.currentTime = (e.clientX - r.left) / r.width * (S.subs[S.subs.length-1]?.end || 1);
     updatePlayerUI();
   });
-  document.getElementById('sync-btn').addEventListener('click', () => {
-    stopTimer(); S.isPlaying = false;
-    document.getElementById('pp').textContent = '▶';
-    startSync();
-  });
+  document.getElementById('sync-btn-el').addEventListener('click', toggleSync);
 }
 
 // ─────────────────────────────────────────
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v2';
+  const sw = `const C='sp-v3';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
