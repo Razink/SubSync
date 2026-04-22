@@ -25,6 +25,9 @@
     .logo h1 { font-size: 44px; font-style: italic; font-weight: 800;
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
+    .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+      background: #A855F7; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #A855F7; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -354,7 +357,7 @@ function setupHTML() {
   const ok = S.subs.length > 0;
   return `
     <div class="setup">
-      <div class="logo"><h1>SubPlayer</h1><p>LECTEUR DE SOUS-TITRES</p></div>
+      <div class="logo"><h1>SubPlayer<span class="version-dot"></span></h1><p>LECTEUR DE SOUS-TITRES</p></div>
       <div class="sec">
         <div class="lbl">FICHIER SRT</div>
         <label class="drop ${ok?'ok':''}">
