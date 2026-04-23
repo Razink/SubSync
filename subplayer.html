@@ -371,37 +371,61 @@ function sig(text) {
   return norm(text).split(' ').filter(w => w.length > 2 && !STOP.has(w));
 }
 
+function bigrams(words) {
+  const out = [];
+  for (let i = 0; i < words.length - 1; i++) out.push(words[i] + '·' + words[i+1]);
+  return out;
+}
+
 function score(tw, cw) {
   if (!tw.length || !cw.length) return 0;
+  const tb = bigrams(tw);
+  const cb = bigrams(cw);
+  if (tb.length && cb.length) {
+    // Recall bigram : beaucoup plus discriminant que l'unigram
+    const cbSet = new Set(cb);
+    return tb.filter(b => cbSet.has(b)).length / tb.length;
+  }
+  // Fallback unigram si input trop court pour bigrammes
   const cSet = new Set(cw);
   return tw.filter(w => cSet.has(w)).length / tw.length;
 }
 
 function findMatch(text, currentTime) {
   const tw = sig(text);
-  if (tw.length < 2) return null;
+  if (tw.length < 4) return null; // 4+ mots-clés requis pour éviter faux positifs
 
-  let bestNear = null, bestNearScore = 0;
-  let bestFar  = null, bestFarScore  = 0;
+  let bestNear = null, bestFar = null;
 
   for (let W = 2; W <= 8; W++) {
     for (let i = 0; i <= S.subs.length - W; i++) {
       const chunk = S.subs.slice(i, i+W).map(s=>s.text).join(' ');
-      const cw  = sig(chunk);
-      const sc  = score(tw, cw);
-      const dt  = Math.abs(S.subs[i].start - currentTime);
+      const cw = sig(chunk);
+      const sc = score(tw, cw);
+      const dt = Math.abs(S.subs[i].start - currentTime);
       const pos = { time: S.subs[i].start, score: sc, text: chunk };
-      if (dt < 90) { if (sc > bestNearScore) { bestNearScore = sc; bestNear = pos; } }
-      else         { if (sc > bestFarScore)  { bestFarScore  = sc; bestFar  = pos; } }
+      if (dt < 90) { if (!bestNear || sc > bestNear.score) bestNear = pos; }
+      else         { if (!bestFar  || sc > bestFar.score)  bestFar  = pos; }
     }
   }
 
-  if (bestNearScore >= 0.40) return bestNear;
-  if (bestFarScore  >= 0.55) return bestFar;
+  const MIN = 0.55;          // seuil minimum uniforme
+  const FAR_BONUS = 0.10;    // far doit battre near de cette marge pour gagner
+  const nearOK = bestNear && bestNear.score >= MIN;
+  const farOK  = bestFar  && bestFar.score  >= MIN;
 
-  const best = bestNearScore > bestFarScore ? bestNear : bestFar;
-  const bestScore = Math.max(bestNearScore, bestFarScore);
-  if (best) log('l-fail', `✗ Meilleur score: ${bestScore.toFixed(2)} (min 0.35) — "${best.text.slice(0,40)}..."`);
+  let chosen = null;
+  if (nearOK && farOK) {
+    chosen = (bestFar.score > bestNear.score + FAR_BONUS) ? bestFar : bestNear;
+  } else if (nearOK) chosen = bestNear;
+  else if (farOK)   chosen = bestFar;
+
+  if (chosen) return chosen;
+
+  // Diagnostic en cas de miss
+  const n = bestNear?.score.toFixed(2) ?? '—';
+  const f = bestFar?.score.toFixed(2)  ?? '—';
+  log('l-fail', `✗ near:${n} far:${f} (min ${MIN})`);
   return null;
 }
 
@@ -522,8 +546,8 @@ function tryMatchAndApply(text) {
     }
   }
 
-  // Auto-stop uniquement sur match confiant — un mauvais match ne bloque pas
-  if (match.score >= 0.60) {
+  // Auto-stop uniquement sur match très confiant
+  if (match.score >= 0.65) {
     playBell();
     stopSync();
   }
@@ -815,7 +839,7 @@ function bindPlayer() {
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v10';
+  const sw = `const C='sp-v11';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
