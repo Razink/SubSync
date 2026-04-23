@@ -107,12 +107,27 @@
     .sync-btn-el.active { background: rgba(34,197,94,.25); border-color: var(--green); }
     .sync-btn-el:active { opacity: .75; }
 
-    /* Fullscreen button */
+    /* Fullscreen / cinema button */
     .fs-btn { width: 36px; height: 36px; border-radius: 8px; border: none;
       background: rgba(255,255,255,.08); color: var(--muted); font-size: 13px;
       cursor: pointer; display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; }
     .fs-btn:active { background: rgba(255,255,255,.2); }
+
+    /* Cinema mode — texte seul sur fond noir */
+    .player.cinema .p-top,
+    .player.cinema .waveform-row,
+    .player.cinema .debug-panel,
+    .player.cinema .prog,
+    .player.cinema .ctrls { display: none !important; }
+    .player.cinema { background: #000; }
+    .player.cinema .sub-area { padding: 0 28px; }
+    .player.cinema .sub-text { font-size: 40px; line-height: 1.5; }
+    .cinema-exit { display: none; position: absolute; top: 14px; right: 14px;
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,.12); color: rgba(255,255,255,.5); font-size: 16px;
+      cursor: pointer; align-items: center; justify-content: center; z-index: 10; }
+    .player.cinema .cinema-exit { display: flex; }
 
     /* Debug panel — hidden, revealed by tapping waveform */
     .debug-panel { display: none; }
@@ -400,12 +415,12 @@ function toggleSync() {
 
 let restartTimer = null;
 
-function startSync() {
+async function startSync() {
   if (!SR) { alert('Reconnaissance vocale non disponible sur ce navigateur.'); return; }
   S.syncActive = true;
   updateSyncBtn();
-  startWaveActive();
-  launchRecognition();
+  await startWaveActive(); // micro déjà actif → Chrome ne joue pas le ding au démarrage SR
+  if (S.syncActive) launchRecognition();
 }
 
 function launchRecognition() {
@@ -530,22 +545,27 @@ function playBell() {
   } catch(e) {}
 }
 
-const FS_ENTER = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M0 0h4.5v1.5H1.5V4.5H0V0zm9.5 0H14v4.5h-1.5V1.5H9.5V0zM0 9.5h1.5V12.5H4.5V14H0V9.5zm12.5 3H9.5V14H14V9.5h-1.5V12.5z"/></svg>`;
-const FS_EXIT  = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 0v3H0v1.5h4.5V0H3zm7.5 0V4.5H15V3h-3V0H10.5zM0 10.5V12h3v3h1.5V10.5H0zm10.5 0V15H12v-3h3v-1.5H10.5z"/></svg>`;
-
-function toggleFullscreen() {
-  const el = document.documentElement;
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(() => {});
+function toggleCinema() {
+  const player = document.querySelector('.player');
+  if (!player) return;
+  const on = player.classList.toggle('cinema');
+  if (on) {
+    const el = document.documentElement;
+    (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el).catch(() => {});
   } else {
-    (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch(() => {});
+    if (document.fullscreenElement || document.webkitFullscreenElement)
+      (document.exitFullscreen || document.webkitExitFullscreen)?.call(document).catch(() => {});
   }
+  updateFsBtn();
 }
 
 function updateFsBtn() {
   const btn = document.getElementById('fs-btn');
-  if (btn) btn.innerHTML = (document.fullscreenElement || document.webkitFullscreenElement)
-    ? FS_EXIT : FS_ENTER;
+  if (!btn) return;
+  const on = document.querySelector('.player.cinema');
+  btn.innerHTML = on
+    ? `<svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor"><path d="M3.5 0H5v5H0V3.5h3.5V0zm4.5 0h1.5v3.5H13V5H8V0zM0 8h5v5H3.5V9.5H0V8zm8 0h5v1.5H9.5V13H8V8z"/></svg>`
+    : `<svg width="13" height="13" viewBox="0 0 13 13" fill="currentColor"><path d="M0 0h4.5v1.5H1.5V4.5H0V0zm8.5 0H13v4.5h-1.5V1.5H8.5V0zM0 8.5h1.5V11.5H4.5V13H0V8.5zm11.5 3H8.5V13H13V8.5h-1.5V11.5z"/></svg>`;
 }
 
 // ─────────────────────────────────────────
@@ -641,6 +661,7 @@ function playerHTML() {
       <div class="sub-area">
         <div class="sub-text blank" id="sub-text">—</div>
         <div class="adj-ping" id="adj-ping"></div>
+        <button class="cinema-exit" id="cinema-exit">✕</button>
       </div>
 
       <div class="waveform-row">
@@ -746,9 +767,18 @@ function bindPlayer() {
   document.getElementById('waveform-canvas').addEventListener('click', () => {
     document.getElementById('debug-panel')?.classList.toggle('on');
   });
-  document.getElementById('fs-btn').addEventListener('click', toggleFullscreen);
-  document.addEventListener('fullscreenchange', updateFsBtn);
-  document.addEventListener('webkitfullscreenchange', updateFsBtn);
+  document.getElementById('fs-btn').addEventListener('click', toggleCinema);
+  document.getElementById('cinema-exit').addEventListener('click', toggleCinema);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement)
+      document.querySelector('.player')?.classList.remove('cinema');
+    updateFsBtn();
+  });
+  document.addEventListener('webkitfullscreenchange', () => {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement)
+      document.querySelector('.player')?.classList.remove('cinema');
+    updateFsBtn();
+  });
 
   updateFsBtn();
   startWaveIdle();
@@ -758,7 +788,7 @@ function bindPlayer() {
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v6';
+  const sw = `const C='sp-v7';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
