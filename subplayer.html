@@ -107,6 +107,13 @@
     .sync-btn-el.active { background: rgba(34,197,94,.25); border-color: var(--green); }
     .sync-btn-el:active { opacity: .75; }
 
+    /* Fullscreen button */
+    .fs-btn { width: 36px; height: 36px; border-radius: 8px; border: none;
+      background: rgba(255,255,255,.08); color: var(--muted); font-size: 13px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; }
+    .fs-btn:active { background: rgba(255,255,255,.2); }
+
     /* Debug panel — hidden, revealed by tapping waveform */
     .debug-panel { display: none; }
     .debug-panel.on { display: block; }
@@ -406,7 +413,7 @@ function launchRecognition() {
 
   recognition = new SR();
   recognition.lang = S.lang;
-  recognition.continuous = false;
+  recognition.continuous = true;   // évite les ding répétés à chaque redémarrage
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
@@ -475,6 +482,7 @@ function tryMatchAndApply(text) {
     } else {
       log('l-info', '→ Déjà bon (Δ < 1s)');
     }
+    playBell();
     stopSync();
   }
 }
@@ -503,6 +511,41 @@ function showPing(label) {
   el.textContent = '✓ ' + label;
   el.style.opacity = '1';
   setTimeout(() => { if (el) el.style.opacity = '0'; }, 1800);
+}
+
+function playBell() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1047, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.1);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 1.1);
+  } catch(e) {}
+}
+
+const FS_ENTER = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M0 0h4.5v1.5H1.5V4.5H0V0zm9.5 0H14v4.5h-1.5V1.5H9.5V0zM0 9.5h1.5V12.5H4.5V14H0V9.5zm12.5 3H9.5V14H14V9.5h-1.5V12.5z"/></svg>`;
+const FS_EXIT  = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><path d="M3 0v3H0v1.5h4.5V0H3zm7.5 0V4.5H15V3h-3V0H10.5zM0 10.5V12h3v3h1.5V10.5H0zm10.5 0V15H12v-3h3v-1.5H10.5z"/></svg>`;
+
+function toggleFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    (el.requestFullscreen || el.webkitRequestFullscreen).call(el).catch(() => {});
+  } else {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document).catch(() => {});
+  }
+}
+
+function updateFsBtn() {
+  const btn = document.getElementById('fs-btn');
+  if (btn) btn.innerHTML = (document.fullscreenElement || document.webkitFullscreenElement)
+    ? FS_EXIT : FS_ENTER;
 }
 
 // ─────────────────────────────────────────
@@ -588,10 +631,11 @@ function playerHTML() {
       <div class="p-top">
         <button class="back" id="back">←</button>
         <span class="p-name">${S.srtName}</span>
-        <div class="sync-pill" id="sync-pill">
-          <div class="sync-dot"></div>SYNC
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="sync-pill" id="sync-pill"><div class="sync-dot"></div>SYNC</div>
+          <span class="p-time" id="p-time">${fmt(S.currentTime)}</span>
+          <button class="fs-btn" id="fs-btn"></button>
         </div>
-        <span class="p-time" id="p-time">${fmt(S.currentTime)}</span>
       </div>
 
       <div class="sub-area">
@@ -702,7 +746,11 @@ function bindPlayer() {
   document.getElementById('waveform-canvas').addEventListener('click', () => {
     document.getElementById('debug-panel')?.classList.toggle('on');
   });
+  document.getElementById('fs-btn').addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', updateFsBtn);
+  document.addEventListener('webkitfullscreenchange', updateFsBtn);
 
+  updateFsBtn();
   startWaveIdle();
 }
 
@@ -710,7 +758,7 @@ function bindPlayer() {
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v4';
+  const sw = `const C='sp-v5';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
