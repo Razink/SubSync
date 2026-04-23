@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #a855f7; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #a855f7; }
+      background: #06B6D4; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #06B6D4; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -196,10 +196,13 @@ const S = {
   subs: [], srtName: '', lang: 'fr-FR',
   currentTime: 0, isPlaying: false,
   syncActive: false,
+  bigramIndex: null,
 };
 
 let timerRaf = null, lastTick = null;
 let recognition = null;
+let lastMatchAttempt = 0, lastSuccessfulMatch = 0, lastMatchTimeMs = 0;
+let interimEventCount = 0, sessionStart = 0, metricsInterval = null;
 
 // ─────────────────────────────────────────
 // WAVEFORM VISUALIZATION
@@ -376,13 +379,87 @@ function score(tw, cw) {
   return tw.filter(w => cSet.has(w)).length / tw.length;
 }
 
-function findMatch(text, currentTime) {
+function extractBigrams(keywords) {
+  const bigrams = [];
+  for (let i = 0; i < keywords.length - 1; i++) {
+    bigrams.push(keywords[i] + '_' + keywords[i + 1]);
+  }
+  for (const k of keywords) bigrams.push(k);
+  return bigrams;
+}
+
+function buildBigramIndex(subs) {
+  const index = new Map();
+  subs.forEach((sub, blockIdx) => {
+    const kws = sig(sub.text);
+    const bgs = extractBigrams(kws);
+    for (const bg of bgs) {
+      let set = index.get(bg);
+      if (!set) { set = new Set(); index.set(bg, set); }
+      set.add(blockIdx);
+    }
+  });
+  return index;
+}
+
+function aggregateWindow(votes, windowSize) {
+  const agg = new Map();
+  votes.forEach((count, blockIdx) => {
+    for (let offset = -windowSize; offset <= windowSize; offset++) {
+      const target = blockIdx + offset;
+      agg.set(target, (agg.get(target) || 0) + count);
+    }
+  });
+  return agg;
+}
+
+function tryMatch(spokenKeywords, currentTime) {
+  if (!S.bigramIndex) return findMatchLegacy(spokenKeywords.join(' '), currentTime);
+  const spokenBigrams = extractBigrams(spokenKeywords);
+  if (spokenBigrams.length === 0) return null;
+
+  const votes = new Map();
+  for (const bg of spokenBigrams) {
+    const candidates = S.bigramIndex.get(bg);
+    if (!candidates) continue;
+    candidates.forEach(blockIdx => {
+      votes.set(blockIdx, (votes.get(blockIdx) || 0) + 1);
+    });
+  }
+  if (votes.size === 0) return null;
+
+  const windowed = aggregateWindow(votes, 3);
+
+  let best = null;
+  windowed.forEach((sc, centerIdx) => {
+    const sub = S.subs[centerIdx];
+    if (!sub) return;
+    const recall = sc / spokenBigrams.length;
+    const distance = Math.abs(sub.start - currentTime);
+    const threshold = distance <= 90 ? 0.40 : 0.55;
+    if (recall >= threshold && (!best || recall > best.score)) {
+      best = { time: sub.start, score: recall, text: sub.text };
+    }
+  });
+
+  if (!best) {
+    let topIdx = -1, topScore = 0;
+    windowed.forEach((sc, idx) => { if (sc > topScore) { topScore = sc; topIdx = idx; } });
+    if (topIdx >= 0) {
+      const sub = S.subs[topIdx];
+      const recall = topScore / spokenBigrams.length;
+      log('l-fail', `✗ Meilleur recall: ${recall.toFixed(2)} — "${sub.text.slice(0,40)}..."`);
+    }
+  }
+  return best;
+}
+
+// Ancien matcher — fallback si l'index n'est pas construit
+function findMatchLegacy(text, currentTime) {
   const tw = sig(text);
   if (tw.length < 2) return null;
-
   let bestNear = null, bestNearScore = 0;
   let bestFar  = null, bestFarScore  = 0;
-
   for (let W = 2; W <= 8; W++) {
     for (let i = 0; i <= S.subs.length - W; i++) {
       const chunk = S.subs.slice(i, i+W).map(s=>s.text).join(' ');
@@ -394,13 +471,8 @@ function findMatch(text, currentTime) {
       else         { if (sc > bestFarScore)  { bestFarScore  = sc; bestFar  = pos; } }
     }
   }
-
   if (bestNearScore >= 0.40) return bestNear;
   if (bestFarScore  >= 0.55) return bestFar;
-
-  const best = bestNearScore > bestFarScore ? bestNear : bestFar;
-  const bestScore = Math.max(bestNearScore, bestFarScore);
-  if (best) log('l-fail', `✗ Meilleur score: ${bestScore.toFixed(2)} (min 0.35) — "${best.text.slice(0,40)}..."`);
   return null;
 }
 
@@ -418,7 +490,25 @@ let restartTimer = null;
 async function startSync() {
   if (!SR) { alert('Reconnaissance vocale non disponible sur ce navigateur.'); return; }
   S.syncActive = true;
+  // Reset métriques de session
+  interimEventCount = 0;
+  lastMatchAttempt = 0;
+  lastMatchTimeMs = 0;
+  lastSuccessfulMatch = 0;
   updateSyncBtn();
+  log('l-info', `📊 Index: ${S.bigramIndex ? S.bigramIndex.size : 0} bigrams · ${S.subs.length} subs`);
+  // Métriques roulantes toutes les 5s
+  let lastCount = 0, lastTick = performance.now();
+  clearInterval(metricsInterval);
+  metricsInterval = setInterval(() => {
+    if (!S.syncActive) return;
+    const now = performance.now();
+    const dt = (now - lastTick) / 1000;
+    const rate = ((interimEventCount - lastCount) / dt).toFixed(1);
+    lastCount = interimEventCount;
+    lastTick = now;
+    log('l-info', `📊 ${rate} interim/s · dernier match: ${lastMatchTimeMs.toFixed(1)}ms`);
+  }, 5000);
   await startWaveActive(); // micro déjà actif → Chrome ne joue pas le ding au démarrage SR
   if (S.syncActive) launchRecognition();
 }
@@ -432,21 +522,42 @@ function launchRecognition() {
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  recognition.onstart      = () => log('l-mic',  '🎤 Écoute...');
+  recognition.onstart = () => {
+    sessionStart = performance.now();
+    log('l-mic', '🎤 Écoute...');
+  };
   recognition.onspeechstart = () => log('l-mic', '🗣 Voix détectée');
 
   recognition.onresult = e => {
-    let interim = '', final = '';
+    interimEventCount++;
+
+    // Accumule tout le transcript (interim + final) depuis début de session
+    let fullTranscript = '';
     for (let i = 0; i < e.results.length; i++) {
-      e.results[i].isFinal
-        ? (final  += e.results[i][0].transcript + ' ')
-        : (interim += e.results[i][0].transcript);
+      fullTranscript += e.results[i][0].transcript + ' ';
     }
-    if (interim) log('l-info', '… "' + interim + '"');
-    if (final.trim()) {
-      log('l-hear', '💬 "' + final.trim() + '"');
-      tryMatchAndApply(final.trim());
+    fullTranscript = fullTranscript.trim();
+    if (!fullTranscript) return;
+
+    const now = performance.now();
+
+    // Session > 20s : reset (les anciens résultats ne sont plus pertinents)
+    if (now - sessionStart > 20000) {
+      log('l-info', '↻ Session > 20s — reset');
+      try { recognition.stop(); } catch(err) {}
+      return;
     }
+
+    // Throttle à 4Hz max
+    if (now - lastMatchAttempt < 250) return;
+    lastMatchAttempt = now;
+
+    const keywords = sig(fullTranscript);
+    // Min 4 keywords sur auto pour éviter faux positifs sur interim court
+    if (keywords.length < 4) return;
+
+    log('l-hear', '💬 "' + fullTranscript.slice(-80) + '"');
+    tryMatchAndApply(fullTranscript);
   };
 
   recognition.onnomatch = () => log('l-fail', '✗ Voix non reconnue');
@@ -468,6 +579,8 @@ function launchRecognition() {
 function stopSync() {
   S.syncActive = false;
   clearTimeout(restartTimer);
+  clearInterval(metricsInterval);
+  metricsInterval = null;
   try { recognition?.stop(); } catch(e) {}
   recognition = null;
   log('l-info', '⏹ Sync arrêtée');
@@ -477,15 +590,19 @@ function stopSync() {
 
 function tryMatchAndApply(text) {
   const tw = sig(text);
-  log('l-key', '🔑 Mots clés: [' + tw.join(', ') + ']');
+  log('l-key', '🔑 Mots clés (' + tw.length + '): [' + tw.slice(0,10).join(', ') + (tw.length>10?'...':'') + ']');
   if (tw.length < 2) { log('l-fail', '✗ Pas assez de mots clés (<2)'); return; }
-  const match = findMatch(text, S.currentTime);
+
+  const t0 = performance.now();
+  const match = tryMatch(tw, S.currentTime);
+  lastMatchTimeMs = performance.now() - t0;
+
   if (match) {
     const diff = match.time - S.currentTime;
-    log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
+    log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s (${lastMatchTimeMs.toFixed(1)}ms)`);
     log('l-info', `  → "${match.text.slice(0, 50)}"`);
     if (Math.abs(diff) > 1.0) {
-      S.currentTime = match.time + 4.5;
+      S.currentTime = match.time + 2.0; // compense le délai d'interim (réduit depuis 4.5)
       updatePlayerUI();
       showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
       if (!S.isPlaying) {
@@ -497,6 +614,7 @@ function tryMatchAndApply(text) {
     } else {
       log('l-info', '→ Déjà bon (Δ < 1s)');
     }
+    lastSuccessfulMatch = performance.now();
     playBell();
     stopSync();
   }
@@ -723,6 +841,9 @@ function bindSetup() {
       S.subs = parseSRT(ev.target.result);
       S.srtName = f.name.replace(/\.srt$/i,'');
       S.lang = detectLang(S.subs);
+      const t0 = performance.now();
+      S.bigramIndex = buildBigramIndex(S.subs);
+      console.log(`[subsync] Index bigram: ${S.bigramIndex.size} entrées en ${(performance.now()-t0).toFixed(1)}ms pour ${S.subs.length} subs`);
       render();
     };
     r.readAsText(f);
@@ -788,7 +909,7 @@ function bindPlayer() {
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v7';
+  const sw = `const C='sp-v8';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
