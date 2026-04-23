@@ -26,8 +26,8 @@
       color: var(--gold); letter-spacing: -1px; line-height: 1; }
     .logo p { font-size: 11px; letter-spacing: 3px; color: var(--muted); margin-top: 6px; }
     .version-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
-      background: #EF4444; margin-left: 8px; vertical-align: middle;
-      box-shadow: 0 0 6px #EF4444; }
+      background: #06b6d4; margin-left: 8px; vertical-align: middle;
+      box-shadow: 0 0 6px #06b6d4; }
     .lbl { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-bottom: 10px; }
     .sec { margin-bottom: 28px; }
     .drop { border: 1.5px dashed var(--border); border-radius: var(--r);
@@ -64,7 +64,7 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .p-time { font-size: 15px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
-    /* Sync status pill — top right */
+    /* Sync status pill */
     .sync-pill {
       display: none; align-items: center; gap: 6px;
       background: rgba(34,197,94,.15); border: 1px solid rgba(34,197,94,.3);
@@ -88,28 +88,35 @@
       line-height: 1.45; text-shadow: 0 2px 10px rgba(0,0,0,.9); min-height: 80px; }
     .sub-text.blank { color: rgba(255,255,255,.12); font-size: 18px; }
 
-    /* Sync button — full width, prominent */
-    .sync-row { padding: 0 20px 10px; }
+    /* Waveform row — canvas + compact sync button */
+    .waveform-row { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; }
+    #waveform-canvas {
+      flex: 1; height: 56px; border-radius: 10px;
+      background: rgba(255,255,255,.04); cursor: pointer; display: block;
+    }
+
+    /* Sync button — 44×44 icon only */
     .sync-btn-el {
-      width: 100%; padding: 15px; border-radius: var(--r);
-      font-size: 16px; font-weight: 600; letter-spacing: .3px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 44px; height: 44px; border-radius: 12px;
+      font-size: 20px; cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
       transition: background .15s, border-color .15s;
       border: 1.5px solid rgba(34,197,94,.4);
       background: rgba(34,197,94,.1); color: var(--green);
     }
-    .sync-btn-el.active {
-      background: rgba(34,197,94,.2); border-color: var(--green); color: var(--green);
-    }
-    .sync-btn-el:active { opacity: .8; }
+    .sync-btn-el.active { background: rgba(34,197,94,.25); border-color: var(--green); }
+    .sync-btn-el:active { opacity: .75; }
+
+    /* Debug panel — hidden, revealed by tapping waveform */
+    .debug-panel { display: none; }
+    .debug-panel.on { display: block; }
 
     /* Debug log */
     .sync-log {
       margin: 0 20px 10px; background: rgba(0,0,0,.6); border: 1px solid var(--border);
       border-radius: 10px; padding: 10px 12px; max-height: 110px; overflow-y: auto;
-      display: none; font-size: 12px; font-family: monospace; line-height: 1.7;
+      font-size: 12px; font-family: monospace; line-height: 1.7;
     }
-    .sync-log.on { display: block; }
     .sync-log .l-mic  { color: #60a5fa; }
     .sync-log .l-hear { color: var(--text); }
     .sync-log .l-key  { color: #fbbf24; }
@@ -118,9 +125,7 @@
     .sync-log .l-info { color: var(--muted); }
 
     /* Manual input */
-    .manual-row {
-      display: flex; gap: 8px; padding: 0 20px 10px;
-    }
+    .manual-row { display: flex; gap: 8px; padding: 0 20px 10px; }
     .manual-inp {
       flex: 1; background: var(--card); border: 1.5px solid var(--border);
       border-radius: 10px; color: var(--text); font-size: 14px; padding: 10px 14px;
@@ -175,6 +180,115 @@ let timerRaf = null, lastTick = null;
 let recognition = null;
 
 // ─────────────────────────────────────────
+// WAVEFORM VISUALIZATION
+// ─────────────────────────────────────────
+let waveAnimId = null;
+let audioCtx = null, analyser = null, micStream = null;
+
+function stopWave() {
+  if (waveAnimId) { cancelAnimationFrame(waveAnimId); waveAnimId = null; }
+  if (micStream)  { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+  if (audioCtx)   { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
+  analyser = null;
+}
+
+function startWaveIdle() {
+  stopWave();
+  const canvas = document.getElementById('waveform-canvas');
+  if (!canvas) return;
+  if (!canvas.offsetWidth) {
+    waveAnimId = requestAnimationFrame(() => { waveAnimId = null; startWaveIdle(); });
+    return;
+  }
+  canvas.width  = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight || 56;
+  const ctx = canvas.getContext('2d');
+  const N = 36, barW = canvas.width / N;
+  let t = 0;
+
+  function draw() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    for (let i = 0; i < N; i++) {
+      const phase = (i / N) * Math.PI * 4;
+      const v = 0.12 + 0.09 * Math.sin(t * 0.022 + phase)
+                     + 0.04 * Math.sin(t * 0.041 + phase * 2.1);
+      const barH = Math.max(2, v * H);
+      ctx.globalAlpha = 0.28 + 0.18 * Math.sin(t * 0.03 + phase * 0.7);
+      ctx.fillStyle = '#9ca3af';
+      ctx.fillRect(i * barW + 1, (H - barH) / 2, Math.max(1, barW - 2), barH);
+    }
+    ctx.globalAlpha = 1;
+    t++;
+    waveAnimId = requestAnimationFrame(draw);
+  }
+  waveAnimId = requestAnimationFrame(draw);
+}
+
+async function startWaveActive() {
+  stopWave();
+  const canvas = document.getElementById('waveform-canvas');
+  if (!canvas) return;
+  canvas.width  = canvas.offsetWidth  || 280;
+  canvas.height = canvas.offsetHeight || 56;
+  const ctx = canvas.getContext('2d');
+  const N = 36, barW = canvas.width / N;
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    if (!S.syncActive) { micStream.getTracks().forEach(t => t.stop()); micStream = null; return; }
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    analyser.smoothingTimeConstant = 0.78;
+    audioCtx.createMediaStreamSource(micStream).connect(analyser);
+
+    const bins = analyser.frequencyBinCount;
+    const data = new Uint8Array(bins);
+
+    function drawActive() {
+      if (!S.syncActive) return;
+      analyser.getByteFrequencyData(data);
+      const H = canvas.height;
+      ctx.clearRect(0, 0, canvas.width, H);
+      for (let i = 0; i < N; i++) {
+        const val = data[Math.floor(i * bins / N)] / 255;
+        const barH = Math.max(3, val * H * 0.9);
+        ctx.globalAlpha = 0.45 + val * 0.55;
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(i * barW + 1, (H - barH) / 2, Math.max(1, barW - 2), barH);
+      }
+      ctx.globalAlpha = 1;
+      waveAnimId = requestAnimationFrame(drawActive);
+    }
+    waveAnimId = requestAnimationFrame(drawActive);
+
+  } catch(e) {
+    // Fallback sans accès micro : barres vertes animées
+    let t = 0;
+    function drawFallback() {
+      if (!S.syncActive) return;
+      const H = canvas.height;
+      ctx.clearRect(0, 0, canvas.width, H);
+      for (let i = 0; i < N; i++) {
+        const phase = (i / N) * Math.PI * 4;
+        const v = 0.15 + 0.16 * Math.sin(t * 0.055 + phase)
+                       + 0.07 * Math.sin(t * 0.09  + phase * 2.2);
+        const barH = Math.max(3, v * H);
+        ctx.globalAlpha = 0.5 + 0.35 * Math.sin(t * 0.07 + phase * 0.8);
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(i * barW + 1, (H - barH) / 2, Math.max(1, barW - 2), barH);
+      }
+      ctx.globalAlpha = 1;
+      t++;
+      waveAnimId = requestAnimationFrame(drawFallback);
+    }
+    waveAnimId = requestAnimationFrame(drawFallback);
+  }
+}
+
+// ─────────────────────────────────────────
 // DEBUG LOG
 // ─────────────────────────────────────────
 function log(cls, msg) {
@@ -184,7 +298,6 @@ function log(cls, msg) {
   line.className = cls;
   line.textContent = msg;
   el.appendChild(line);
-  // Keep last 20 lines
   while (el.children.length > 20) el.removeChild(el.firstChild);
   el.scrollTop = el.scrollHeight;
 }
@@ -227,7 +340,7 @@ const STOP = new Set(['le','la','les','de','du','un','une','et','est','je','tu',
 
 function norm(text) {
   return text.toLowerCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g,'') // strip accents
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
     .replace(/['']/g,' ').replace(/[^a-z\s]/g,' ').replace(/\s+/g,' ').trim();
 }
 
@@ -238,7 +351,6 @@ function sig(text) {
 function score(tw, cw) {
   if (!tw.length || !cw.length) return 0;
   const cSet = new Set(cw);
-  // Recall: combien de mots capturés apparaissent dans le sous-titre
   return tw.filter(w => cSet.has(w)).length / tw.length;
 }
 
@@ -264,7 +376,6 @@ function findMatch(text, currentTime) {
   if (bestNearScore >= 0.40) return bestNear;
   if (bestFarScore  >= 0.55) return bestFar;
 
-  // Log le meilleur score même si insuffisant
   const best = bestNearScore > bestFarScore ? bestNear : bestFar;
   const bestScore = Math.max(bestNearScore, bestFarScore);
   if (best) log('l-fail', `✗ Meilleur score: ${bestScore.toFixed(2)} (min 0.35) — "${best.text.slice(0,40)}..."`);
@@ -272,7 +383,7 @@ function findMatch(text, currentTime) {
 }
 
 // ─────────────────────────────────────────
-// CONTINUOUS SYNC
+// SYNC
 // ─────────────────────────────────────────
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -286,6 +397,7 @@ function startSync() {
   if (!SR) { alert('Reconnaissance vocale non disponible sur ce navigateur.'); return; }
   S.syncActive = true;
   updateSyncBtn();
+  startWaveActive();
   launchRecognition();
 }
 
@@ -294,19 +406,18 @@ function launchRecognition() {
 
   recognition = new SR();
   recognition.lang = S.lang;
-  recognition.continuous = false;   // one-shot — plus stable sur Android
-  recognition.interimResults = true; // résultats intermédiaires pour voir que ça capte
+  recognition.continuous = false;
+  recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  recognition.onstart = () => log('l-mic', '🎤 Écoute...');
-
+  recognition.onstart      = () => log('l-mic',  '🎤 Écoute...');
   recognition.onspeechstart = () => log('l-mic', '🗣 Voix détectée');
 
   recognition.onresult = e => {
     let interim = '', final = '';
     for (let i = 0; i < e.results.length; i++) {
       e.results[i].isFinal
-        ? (final += e.results[i][0].transcript + ' ')
+        ? (final  += e.results[i][0].transcript + ' ')
         : (interim += e.results[i][0].transcript);
     }
     if (interim) log('l-info', '… "' + interim + '"');
@@ -320,13 +431,12 @@ function launchRecognition() {
 
   recognition.onerror = e => {
     if (e.error === 'not-allowed') { stopSync(); alert('Accès au micro refusé.'); return; }
-    if (e.error === 'no-speech')   { log('l-info', '— Silence, en attente...'); }
-    else                           { log('l-fail', '✗ Erreur: ' + e.error); }
+    if (e.error === 'no-speech')   log('l-info', '— Silence, en attente...');
+    else                           log('l-fail', '✗ Erreur: ' + e.error);
   };
 
   recognition.onend = () => {
     if (!S.syncActive) return;
-    // Restart after short pause — no loop log spam
     restartTimer = setTimeout(launchRecognition, 800);
   };
 
@@ -340,6 +450,7 @@ function stopSync() {
   recognition = null;
   log('l-info', '⏹ Sync arrêtée');
   updateSyncBtn();
+  startWaveIdle();
 }
 
 function tryMatchAndApply(text) {
@@ -352,7 +463,7 @@ function tryMatchAndApply(text) {
     log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
     log('l-info', `  → "${match.text.slice(0, 50)}"`);
     if (Math.abs(diff) > 1.0) {
-      S.currentTime = match.time + 4.5; // compense le délai de reconnaissance
+      S.currentTime = match.time + 4.5;
       updatePlayerUI();
       showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
       if (!S.isPlaying) {
@@ -364,6 +475,7 @@ function tryMatchAndApply(text) {
     } else {
       log('l-info', '→ Déjà bon (Δ < 1s)');
     }
+    stopSync();
   }
 }
 
@@ -378,15 +490,11 @@ function manualSync() {
 function updateSyncBtn() {
   const btn  = document.getElementById('sync-btn-el');
   const pill = document.getElementById('sync-pill');
-  const logEl = document.getElementById('sync-log');
   if (btn) {
-    btn.className = 'sync-btn-el' + (S.syncActive ? ' active' : '');
-    btn.innerHTML = S.syncActive
-      ? '<span style="width:8px;height:8px;border-radius:50%;background:var(--green);animation:blink 1s infinite;display:inline-block"></span>&nbsp;&nbsp;Sync actif — appuie pour arrêter'
-      : '🎤&nbsp;&nbsp;Synchroniser';
+    btn.className   = 'sync-btn-el' + (S.syncActive ? ' active' : '');
+    btn.textContent = S.syncActive ? '⏹' : '🎤';
   }
-  if (pill)  pill.className  = 'sync-pill'  + (S.syncActive ? ' on' : '');
-  if (logEl) logEl.className = 'sync-log' + (S.syncActive ? ' on' : '');
+  if (pill) pill.className = 'sync-pill' + (S.syncActive ? ' on' : '');
 }
 
 function showPing(label) {
@@ -394,7 +502,7 @@ function showPing(label) {
   if (!el) return;
   el.textContent = '✓ ' + label;
   el.style.opacity = '1';
-  setTimeout(() => { if(el) el.style.opacity = '0'; }, 1800);
+  setTimeout(() => { if (el) el.style.opacity = '0'; }, 1800);
 }
 
 // ─────────────────────────────────────────
@@ -464,8 +572,8 @@ function setupHTML() {
         <strong>Comment utiliser</strong><br>
         1. Charge un fichier .srt<br>
         2. Lance la vidéo sur ton écran<br>
-        3. Appuie sur <strong>Lancer</strong> puis <strong>🎤 Synchroniser</strong><br>
-        La sync tourne en continu et se corrige toute seule
+        3. Appuie sur <strong>Lancer</strong> puis <strong>🎤</strong> pour synchroniser<br>
+        La sync s'arrête automatiquement après un match
       </div></div>`}
     </div>
     <div class="launch-wrap">
@@ -491,16 +599,18 @@ function playerHTML() {
         <div class="adj-ping" id="adj-ping"></div>
       </div>
 
-      <div class="sync-row">
-        <button class="sync-btn-el" id="sync-btn-el">🎤&nbsp;&nbsp;Synchroniser</button>
+      <div class="waveform-row">
+        <canvas id="waveform-canvas"></canvas>
+        <button class="sync-btn-el" id="sync-btn-el">🎤</button>
       </div>
 
-      <div class="sync-log ${S.syncActive ? 'on' : ''}" id="sync-log"></div>
-
-      <div class="manual-row">
-        <input class="manual-inp" id="manual-inp" type="text"
-          placeholder="Tape quelques mots pour synchro...">
-        <button class="manual-go" id="manual-go">OK</button>
+      <div class="debug-panel" id="debug-panel">
+        <div class="sync-log" id="sync-log"></div>
+        <div class="manual-row">
+          <input class="manual-inp" id="manual-inp" type="text"
+            placeholder="Tape quelques mots pour synchro...">
+          <button class="manual-go" id="manual-go">OK</button>
+        </div>
       </div>
 
       <div class="prog">
@@ -560,7 +670,7 @@ function bindSetup() {
 
 function bindPlayer() {
   document.getElementById('back').addEventListener('click', () => {
-    stopTimer(); stopSync(); S.isPlaying = false; S.screen = 'setup'; render();
+    stopTimer(); stopSync(); stopWave(); S.isPlaying = false; S.screen = 'setup'; render();
   });
   document.getElementById('pp').addEventListener('click', () => {
     S.isPlaying = !S.isPlaying;
@@ -589,13 +699,18 @@ function bindPlayer() {
   document.getElementById('manual-inp').addEventListener('keydown', e => {
     if (e.key === 'Enter') manualSync();
   });
+  document.getElementById('waveform-canvas').addEventListener('click', () => {
+    document.getElementById('debug-panel')?.classList.toggle('on');
+  });
+
+  startWaveIdle();
 }
 
 // ─────────────────────────────────────────
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v3';
+  const sw = `const C='sp-v4';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
