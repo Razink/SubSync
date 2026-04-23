@@ -200,6 +200,7 @@ const S = {
 
 let timerRaf = null, lastTick = null;
 let recognition = null;
+let sessionStart = 0, lastMatchAttempt = 0;
 
 // ─────────────────────────────────────────
 // WAVEFORM VISUALIZATION
@@ -434,21 +435,43 @@ function launchRecognition() {
   recognition.interimResults = true;
   recognition.maxAlternatives = 1;
 
-  recognition.onstart      = () => log('l-mic',  '🎤 Écoute...');
+  recognition.onstart = () => {
+    sessionStart = performance.now();
+    log('l-mic', '🎤 Écoute... (' + S.lang + ')');
+  };
   recognition.onspeechstart = () => log('l-mic', '🗣 Voix détectée');
 
   recognition.onresult = e => {
-    let interim = '', final = '';
+    // Transcript complet de la session (interim + finals)
+    let fullTranscript = '';
     for (let i = 0; i < e.results.length; i++) {
-      e.results[i].isFinal
-        ? (final  += e.results[i][0].transcript + ' ')
-        : (interim += e.results[i][0].transcript);
+      fullTranscript += e.results[i][0].transcript + ' ';
     }
-    if (interim) log('l-info', '… "' + interim + '"');
-    if (final.trim()) {
-      log('l-hear', '💬 "' + final.trim() + '"');
-      tryMatchAndApply(final.trim());
+    fullTranscript = fullTranscript.trim();
+
+    // Affiche le dernier segment (interim ou final) pour visibilité
+    const last = e.results[e.results.length - 1];
+    if (last) {
+      const txt = last[0].transcript;
+      if (last.isFinal) log('l-hear', '💬 "' + txt + '"');
+      else              log('l-info', '… "' + txt + '"');
     }
+
+    if (!fullTranscript) return;
+
+    const now = performance.now();
+
+    // Force reset de session après 8s pour éviter un transcript stale
+    if (now - sessionStart > 8000) {
+      try { recognition.stop(); } catch(err) {}
+      return;
+    }
+
+    // Throttle matching à 2.5Hz max
+    if (now - lastMatchAttempt < 400) return;
+    lastMatchAttempt = now;
+
+    tryMatchAndApply(fullTranscript);
   };
 
   recognition.onnomatch = () => log('l-fail', '✗ Voix non reconnue');
@@ -479,26 +502,28 @@ function stopSync() {
 
 function tryMatchAndApply(text) {
   const tw = sig(text);
-  log('l-key', '🔑 Mots clés: [' + tw.join(', ') + ']');
-  if (tw.length < 2) { log('l-fail', '✗ Pas assez de mots clés (<2)'); return; }
+  if (tw.length < 2) return; // silencieux — ça va être appelé souvent
   const match = findMatch(text, S.currentTime);
-  if (match) {
-    const diff = match.time - S.currentTime;
-    log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
-    log('l-info', `  → "${match.text.slice(0, 50)}"`);
-    if (Math.abs(diff) > 1.0) {
-      S.currentTime = match.time + 4.5;
-      updatePlayerUI();
-      showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
-      if (!S.isPlaying) {
-        S.isPlaying = true;
-        startTimer();
-        const pp = document.getElementById('pp');
-        if (pp) pp.textContent = '⏸';
-      }
-    } else {
-      log('l-info', '→ Déjà bon (Δ < 1s)');
+  if (!match) return;
+
+  const diff = match.time - S.currentTime;
+  log('l-ok', `✓ Match @${fmt(match.time)} score:${match.score.toFixed(2)} Δ${diff>0?'+':''}${diff.toFixed(1)}s`);
+  log('l-info', `  → "${match.text.slice(0, 50)}"`);
+
+  if (Math.abs(diff) > 1.0) {
+    S.currentTime = match.time + 1.5; // interim ≈ temps réel, compensation réduite
+    updatePlayerUI();
+    showPing((diff > 0 ? '+' : '') + diff.toFixed(1) + 's');
+    if (!S.isPlaying) {
+      S.isPlaying = true;
+      startTimer();
+      const pp = document.getElementById('pp');
+      if (pp) pp.textContent = '⏸';
     }
+  }
+
+  // Auto-stop uniquement sur match confiant — un mauvais match ne bloque pas
+  if (match.score >= 0.60) {
     playBell();
     stopSync();
   }
@@ -790,7 +815,7 @@ function bindPlayer() {
 // PWA
 // ─────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  const sw = `const C='sp-v9';
+  const sw = `const C='sp-v10';
     self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname]))));
     self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
   navigator.serviceWorker.register(
